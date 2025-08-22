@@ -138,25 +138,40 @@ export class TerminalService {
     return new Promise((resolve) => {
       const env = { ...process.env, ...options.environment };
 
-      // Parse command and arguments
-      const args = this.parseCommand(command);
-      const cmd = args[0];
-      const cmdArgs = args.slice(1);
-
-      if (!cmd) {
-        throw new Error("No command specified");
-      }
+      // Check if command contains shell operators that require shell execution
+      const requiresShell = /[>|&;`$(){}[\]\\]/.test(command);
 
       console.log(`🖥️ [Terminal] Executing: ${command}`);
       console.log(`🖥️ [Terminal] Working directory: ${workingDirectory}`);
       console.log(`🖥️ [Terminal] Timeout: ${timeout}ms`);
+      console.log(`🖥️ [Terminal] Requires shell: ${requiresShell}`);
 
-      const childProcess: ChildProcess = spawn(cmd, cmdArgs, {
-        cwd: workingDirectory,
-        env,
-        shell: os.platform() === "win32" ? true : shell || "/bin/sh",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      let childProcess: ChildProcess;
+
+      if (requiresShell) {
+        // Execute as shell command for commands with redirection, pipes, etc.
+        childProcess = spawn(shell || "/bin/sh", ["-c", command], {
+          cwd: workingDirectory,
+          env,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+      } else {
+        // Parse command and arguments for simple commands
+        const args = this.parseCommand(command);
+        const cmd = args[0];
+        const cmdArgs = args.slice(1);
+
+        if (!cmd) {
+          throw new Error("No command specified");
+        }
+
+        childProcess = spawn(cmd, cmdArgs, {
+          cwd: workingDirectory,
+          env,
+          shell: os.platform() === "win32" ? true : false,
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+      }
 
       // Set up timeout
       const timeoutHandle = setTimeout(() => {
