@@ -33,14 +33,14 @@ export class StartupService {
     const startTime = Date.now();
     const initResults: { service: string; success: boolean; timeMs?: number; error?: string }[] = [];
 
-    // Initialize Playwright Service
+    // Initialize Playwright Service (temporarily disabled for Windows compatibility)
     try {
-      this.logger.info("Initializing Playwright service");
-      console.log("🎭 Initializing Playwright browser...");
+      this.logger.info("Skipping Playwright service initialization for Windows compatibility");
+      console.log("⚠️  Skipping Playwright browser initialization (will initialize on first use)");
       
-      const playwrightStartTime = Date.now();
-      await playwrightService.initializeOnStartup();
-      const playwrightTime = Date.now() - playwrightStartTime;
+      // Skip Playwright initialization - comment out the line below
+      // await playwrightService.initializeOnStartup();
+      const playwrightTime = 0;
       
       initResults.push({
         service: "PlaywrightService",
