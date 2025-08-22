@@ -1,0 +1,317 @@
+name: 🚀 Deploy to Digital Ocean
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}
+    PYTHON_IMAGE_NAME: ${{ github.repository }}-python-pdf
+
+jobs:
+    # Test Job
+    test:
+        name: 🧪 Test Application
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v1
+              with:
+                  bun-version: latest
+
+            - name: Install dependencies
+              run: bun install --frozen-lockfile
+
+            - name: Run type check
+              run: bun run --bun tsc --noEmit
+
+            - name: Test build
+              run: bun run build
+
+    # Build and Push Docker Images
+    build:
+        name: 🐳 Build & Push Docker Images
+        runs-on: ubuntu-latest
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        needs: test
+        permissions:
+            contents: read
+            packages: write
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            # Build Main Application
+            - name: Extract metadata for main app
+              id: meta-main
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=ref,event=branch
+                      type=ref,event=pr
+                      type=sha,prefix={{branch}}-
+                      type=raw,value=latest,enable={{is_default_branch}}
+
+            - name: Build and push main Docker image
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  platforms: linux/amd64
+                  push: true
+                  tags: ${{ steps.meta-main.outputs.tags }}
+                  labels: ${{ steps.meta-main.outputs.labels }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+            # Build Python PDF Service
+            - name: Extract metadata for Python service
+              id: meta-python
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.PYTHON_IMAGE_NAME }}
+                  tags: |
+                      type=ref,event=branch
+                      type=ref,event=pr
+                      type=sha,prefix={{branch}}-
+                      type=raw,value=latest,enable={{is_default_branch}}
+
+            - name: Build and push Python PDF service image
+              uses: docker/build-push-action@v5
+              with:
+                  context: ./python-pdf-service
+                  platforms: linux/amd64
+                  push: true
+                  tags: ${{ steps.meta-python.outputs.tags }}
+                  labels: ${{ steps.meta-python.outputs.labels }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+
+    # Deploy to Digital Ocean
+    deploy:
+        name: 🌊 Deploy to Digital Ocean
+        runs-on: ubuntu-latest
+        needs: build
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Deploy to Digital Ocean Droplet
+              uses: appleboy/ssh-action@v1.0.3
+              with:
+                  host: ${{ secrets.DO_HOST }}
+                  username: ${{ secrets.DO_USERNAME }}
+                  password: ${{ secrets.DO_PASSWORD }}
+                  port: 22
+                  script: |
+                      # Set variables
+                      MAIN_IMAGE="ghcr.io/${{ github.repository }}:latest"
+                      PYTHON_IMAGE="ghcr.io/${{ github.repository }}-python-pdf:latest"
+                      MAIN_CONTAINER="fantastic-robo"
+                      PYTHON_CONTAINER="python-pdf-service"
+                      NETWORK_NAME="fantastic-robo-network"
+
+                      echo "🚀 Starting deployment with Python PDF service..."
+
+                      # Login to GitHub Container Registry
+                      echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+                      # Pull latest images
+                      echo "📥 Pulling latest Docker images..."
+                      docker pull $MAIN_IMAGE
+                      docker pull $PYTHON_IMAGE
+
+                      # Stop and remove existing containers
+                      echo "🛑 Stopping existing containers..."
+                      docker stop $MAIN_CONTAINER $PYTHON_CONTAINER || true
+                      docker rm $MAIN_CONTAINER $PYTHON_CONTAINER || true
+
+                      # Create network if it doesn't exist
+                      echo "🌐 Setting up Docker network..."
+                      docker network create $NETWORK_NAME || true
+
+                      # Remove old images to save space
+                      echo "🧹 Cleaning up old images..."
+                      docker image prune -f
+
+
+                      # Start Python PDF service first
+                      echo "🐍 Starting Python PDF service..."
+                      docker run -d \
+                        --name $PYTHON_CONTAINER \
+                        --network $NETWORK_NAME \
+                        --restart unless-stopped \
+                        -p 8000:8000 \
+                        --memory="1g" \
+                        --memory-reservation="512m" \
+                        -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
+                        --health-cmd="python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\")'" \
+                        --health-interval=30s \
+                        --health-timeout=10s \
+                        --health-retries=3 \
+                        --health-start-period=10s \
+                        $PYTHON_IMAGE
+
+                      # Wait for Python service to be healthy
+                      echo "⏳ Waiting for Python PDF service to be healthy..."
+                      PYTHON_HEALTHY=false
+                      for i in {1..30}; do
+                        if docker exec $PYTHON_CONTAINER python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" 2>/dev/null; then
+                          echo "✅ Python PDF service is healthy"
+                          PYTHON_HEALTHY=true
+                          break
+                        fi
+                        echo "   Waiting for Python service... ($i/30)"
+                        sleep 2
+                      done
+
+                      # Check if Python service became healthy
+                      if [ "$PYTHON_HEALTHY" = false ]; then
+                        echo "❌ Python PDF service failed to become healthy after 60 seconds!"
+                        echo "🔍 Python container status:"
+                        docker ps -a | grep $PYTHON_CONTAINER || echo "Python container not found"
+                        echo "📋 Python container logs (last 50 lines):"
+                        docker logs $PYTHON_CONTAINER --tail 50
+                        echo "🔧 Python container inspect:"
+                        docker inspect $PYTHON_CONTAINER --format='{{.State.Status}} - {{.State.Error}}' || echo "Cannot inspect python container"
+                        echo "🌐 Testing Python health endpoint manually:"
+                        docker exec $PYTHON_CONTAINER curl -f http://localhost:8000/health || echo "Manual health check failed"
+                        exit 1
+                      fi
+
+                      # Start main application
+                      echo "🌟 Starting main application..."
+                      docker run -d \
+                        --name $MAIN_CONTAINER \
+                        --network $NETWORK_NAME \
+                        --restart unless-stopped \
+                        -p 3000:3000 \
+                        -e NODE_ENV=production \
+                        -e PORT=3000 \
+                        -e PDF_SERVICE_URL=http://$PYTHON_CONTAINER:8000 \
+                        -e USE_PYTHON_PDF=true \
+                        -e EMBEDDINGS_MODEL_API_KEY="${{ secrets.EMBEDDINGS_MODEL_API_KEY }}" \
+                        -e EMBEDDINGS_MODEL_ENDPOINT="${{ secrets.EMBEDDINGS_MODEL_ENDPOINT }}" \
+                        -e EMBEDDINGS_MODEL_DEPLOYMENT_NAME="${{ secrets.EMBEDDINGS_MODEL_DEPLOYMENT_NAME }}" \
+                        -e EMBEDDINGS_MODEL_API_VERSION="${{ secrets.EMBEDDINGS_MODEL_API_VERSION }}" \
+                        -e EMBEDDINGS_MODEL_API_KEY_2="${{ secrets.EMBEDDINGS_MODEL_API_KEY_2 }}" \
+                        -e EMBEDDINGS_MODEL_ENDPOINT_2="${{ secrets.EMBEDDINGS_MODEL_ENDPOINT_2 }}" \
+                        -e EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2="${{ secrets.EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2 }}" \
+                        -e EMBEDDINGS_MODEL_API_VERSION_2="${{ secrets.EMBEDDINGS_MODEL_API_VERSION_2 }}" \
+                        -e LLM_API_KEY="${{ secrets.LLM_API_KEY }}" \
+                        -e LLM_BASE_URL="${{ secrets.LLM_BASE_URL }}" \
+                        -e LLM_DEPLOYMENT_NAME="${{ secrets.LLM_DEPLOYMENT_NAME }}" \
+                        -e LLM_MODEL="${{ secrets.LLM_MODEL }}" \
+                        -e LLM_SERVICE="${{ secrets.LLM_SERVICE }}" \
+                        -e LLM_API_VERSION="${{ secrets.LLM_API_VERSION }}" \
+                        -e LLM_API_KEY_2="${{ secrets.LLM_API_KEY_2 }}" \
+                        -e LLM_BASE_URL_2="${{ secrets.LLM_BASE_URL_2 }}" \
+                        -e LLM_DEPLOYMENT_NAME_2="${{ secrets.LLM_DEPLOYMENT_NAME_2 }}" \
+                        -e LLM_MODEL_2="${{ secrets.LLM_MODEL_2 }}" \
+                        -e LLM_SERVICE_2="${{ secrets.LLM_SERVICE_2 }}" \
+                        -e LLM_API_VERSION_2="${{ secrets.LLM_API_VERSION_2 }}" \
+                        -e HACKRX_AUTH_TOKEN="${{ secrets.HACKRX_AUTH_TOKEN }}" \
+                        -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
+                        -e SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+                        -e SENTRY_ENVIRONMENT="${{ secrets.SENTRY_ENVIRONMENT }}" \
+                        -e SENTRY_RELEASE="${{ secrets.SENTRY_RELEASE }}" \
+                        -e SENTRY_TRACES_SAMPLE_RATE="${{ secrets.SENTRY_TRACES_SAMPLE_RATE }}" \
+                        -e SENTRY_ENABLE_TRACING="${{ secrets.SENTRY_ENABLE_TRACING }}" \
+                        -v /var/log/fantastic-robo:/app/logs \
+                        --memory="2g" \
+                        --memory-reservation="1g" \
+                        $MAIN_IMAGE
+
+                      # Check container status immediately after starting
+                      echo "🔍 Containers started, checking status..."
+                      sleep 3
+                      docker ps -a | grep -E "$MAIN_CONTAINER|$PYTHON_CONTAINER"
+                      echo "📋 Main container logs (first 30 lines):"
+                      docker logs $MAIN_CONTAINER --tail 30
+                      echo "📋 Python container logs (first 30 lines):"
+                      docker logs $PYTHON_CONTAINER --tail 30
+
+                      # Wait for container to start
+                      echo "⏳ Waiting for container to start..."
+                      sleep 20
+
+                      # Check if containers are running
+                      if ! docker ps | grep -q $MAIN_CONTAINER; then
+                        echo "❌ Main container failed to start!"
+                        echo "🔍 Container status:"
+                        docker ps -a | grep $MAIN_CONTAINER || echo "Main container not found"
+                        echo "📋 Main container logs:"
+                        docker logs $MAIN_CONTAINER --tail 50
+                        exit 1
+                      fi
+
+                      if ! docker ps | grep -q $PYTHON_CONTAINER; then
+                        echo "❌ Python container failed to start!"
+                        echo "🔍 Container status:"
+                        docker ps -a | grep $PYTHON_CONTAINER || echo "Python container not found"
+                        echo "📋 Python container logs:"
+                        docker logs $PYTHON_CONTAINER --tail 50
+                        exit 1
+                      fi
+
+                      echo "✅ Both containers are running successfully"
+
+                      # Health check with better error handling
+                      echo "🏥 Running health check..."
+                      HEALTH_CHECK_SUCCESS=false
+                      for i in {1..15}; do
+                        echo "⏳ Health check attempt $i/15..."
+                        if curl -f -s --connect-timeout 5 --max-time 10 http://localhost:3000/healthcheck > /dev/null 2>&1; then
+                          echo "✅ Deployment successful!"
+                          echo "🔗 API Response:"
+                          curl -s http://localhost:3000/healthcheck | head -10 || echo "Could not display response"
+                          HEALTH_CHECK_SUCCESS=true
+                          break
+                        fi
+                        echo "   ❌ Attempt $i failed, retrying in 3 seconds..."
+                        sleep 3
+                      done
+
+                      if [ "$HEALTH_CHECK_SUCCESS" = false ]; then
+                        echo "❌ Health check failed after 15 attempts"
+                        echo "🔍 Final container status:"
+                        docker ps -a | grep -E "$MAIN_CONTAINER|$PYTHON_CONTAINER" || echo "Containers not found"
+                        echo "📋 Main container logs (last 100 lines):"
+                        docker logs $MAIN_CONTAINER --tail 100
+                        echo "� Pythonn container logs (last 100 lines):"
+                        docker logs $PYTHON_CONTAINER --tail 100
+                        echo "🔧 Container inspect:"
+                        docker inspect $MAIN_CONTAINER --format='{{.State.Status}} - {{.State.Error}}' || echo "Cannot inspect main container"
+                        docker inspect $PYTHON_CONTAINER --format='{{.State.Status}} - {{.State.Error}}' || echo "Cannot inspect python container"
+                        exit 1
+                      fi
+
+            - name: 📊 Deployment Status
+              if: always()
+              run: |
+                  if [ ${{ job.status }} == 'success' ]; then
+                    echo "🎉 Deployment completed successfully!"
+                    echo "🔗 Your API is live at: http://${{ secrets.DO_HOST }}:3000"
+                    echo "🏥 Health check: http://${{ secrets.DO_HOST }}:3000/healthcheck"
+                  else
+                    echo "❌ Deployment failed!"
+                  fi
