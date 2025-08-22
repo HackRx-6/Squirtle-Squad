@@ -190,12 +190,19 @@ export class HTMLCleaningService {
       includeEventHandlers = true,
     } = options;
 
+    const originalSize = htmlContent.length;
+
     this.logger.info("Starting HTML cleaning process", {
-      originalSize: htmlContent.length,
+      originalSize: originalSize,
       options,
     });
 
-    const originalSize = htmlContent.length;
+    console.log("\n🧹 [HTMLCleaning] STARTING CLEANING PROCESS:");
+    console.log("=".repeat(60));
+    console.log("📏 Original Size:", originalSize, "characters");
+    console.log("⚙️ Options:", JSON.stringify(options, null, 2));
+    console.log("=".repeat(60));
+
     let cleanedHTML = htmlContent;
 
     // Extract and analyze scripts
@@ -204,6 +211,16 @@ export class HTMLCleaningService {
       includeImportantJS,
       maxScriptSize
     );
+
+    console.log("\n🧹 [HTMLCleaning] SCRIPT ANALYSIS:");
+    console.log("-".repeat(40));
+    console.log("📜 Important Scripts Found:", scriptAnalysis.important.length);
+    console.log("🗑️ Filtered Scripts:", scriptAnalysis.filtered.length);
+    if (scriptAnalysis.important.length > 0 && scriptAnalysis.important[0]) {
+      console.log("✅ Important Script Preview:", 
+        scriptAnalysis.important[0].substring(0, 100) + "...");
+    }
+    console.log("-".repeat(40));
 
     // Remove all script tags first
     cleanedHTML = this.removeScriptTags(cleanedHTML);
@@ -251,6 +268,16 @@ export class HTMLCleaningService {
       importantScripts: scriptAnalysis.important.length,
       filteredScripts: scriptAnalysis.filtered.length,
     });
+
+    console.log("\n🧹 [HTMLCleaning] CLEANING COMPLETED:");
+    console.log("=".repeat(60));
+    console.log("📏 Original Size:", originalSize, "characters");
+    console.log("📏 Cleaned Size:", cleanedSize, "characters");
+    console.log("📊 Compression Ratio:", Math.round(compressionRatio * 100) + "%");
+    console.log("📜 Important Scripts Included:", scriptAnalysis.important.length);
+    console.log("🗑️ Scripts Filtered Out:", scriptAnalysis.filtered.length);
+    console.log("💾 Size Reduction:", (originalSize - cleanedSize), "characters");
+    console.log("=".repeat(60));
 
     return result;
   }

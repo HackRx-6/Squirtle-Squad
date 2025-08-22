@@ -99,30 +99,30 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
   }
 
   const tools: OpenAITool[] = [
-    // {
-    //   type: "function",
-    //   function: {
-    //     name: "http_get_json_batch",
-    //     description:
-    //       "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON for each Call this when a city has multiple different landmarks present.",
-    //     parameters: {
-    //       type: "object",
-    //       properties: {
-    //         urls: {
-    //           type: "array",
-    //           items: { type: "string" },
-    //           description: "List of absolute URLs to fetch (http/https).",
-    //         },
-    //         headers: {
-    //           type: "object",
-    //           description: "Optional HTTP headers to include",
-    //           additionalProperties: { type: "string" },
-    //         },
-    //       },
-    //       required: ["urls"],
-    //     },
-    //   },
-    // },
+    {
+      type: "function",
+      function: {
+        name: "http_get_json_batch",
+        description:
+          "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON for each Call this when a city has multiple different landmarks present.",
+        parameters: {
+          type: "object",
+          properties: {
+            urls: {
+              type: "array",
+              items: { type: "string" },
+              description: "List of absolute URLs to fetch (http/https).",
+            },
+            headers: {
+              type: "object",
+              description: "Optional HTTP headers to include",
+              additionalProperties: { type: "string" },
+            },
+          },
+          required: ["urls"],
+        },
+      },
+    },
     // {
     //   type: "function",
     //   function: {
@@ -259,15 +259,18 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                   properties: {
                     includeHTML: {
                       type: "boolean",
-                      description: "Include cleaned HTML structure (default: true)",
+                      description:
+                        "Include cleaned HTML structure (default: true)",
                     },
                     includeInteractiveElements: {
                       type: "boolean",
-                      description: "Include detailed form, button, and link information (default: true)",
+                      description:
+                        "Include detailed form, button, and link information (default: true)",
                     },
                     maxContentSize: {
                       type: "number",
-                      description: "Maximum size of content in characters (default: 50000)",
+                      description:
+                        "Maximum size of content in characters (default: 50000)",
                     },
                     htmlCleaningOptions: {
                       type: "object",
@@ -275,27 +278,33 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                       properties: {
                         includeImportantJS: {
                           type: "boolean",
-                          description: "Include JavaScript with important operations like API calls (default: true)",
+                          description:
+                            "Include JavaScript with important operations like API calls (default: true)",
                         },
                         preserveCSS: {
                           type: "boolean",
-                          description: "Preserve CSS styling information (default: false)",
+                          description:
+                            "Preserve CSS styling information (default: false)",
                         },
                         includeDataAttributes: {
                           type: "boolean",
-                          description: "Include data-* attributes (default: true)",
+                          description:
+                            "Include data-* attributes (default: true)",
                         },
                         includeAriaAttributes: {
                           type: "boolean",
-                          description: "Include ARIA accessibility attributes (default: true)",
+                          description:
+                            "Include ARIA accessibility attributes (default: true)",
                         },
                         maxScriptSize: {
                           type: "number",
-                          description: "Maximum size of individual JavaScript blocks to include (default: 1500)",
+                          description:
+                            "Maximum size of individual JavaScript blocks to include (default: 1500)",
                         },
                         includeEventHandlers: {
                           type: "boolean",
-                          description: "Include inline event handlers like onclick (default: false)",
+                          description:
+                            "Include inline event handlers like onclick (default: false)",
                         },
                       },
                     },
@@ -320,7 +329,7 @@ export const executeToolCall = async (
   if (toolCall.type !== "function" || !toolCall.function) {
     throw new Error(`Unsupported tool call type: ${toolCall.type}`);
   }
-  
+
   const { name, arguments: rawArgs } = toolCall.function;
   try {
     const args = rawArgs ? JSON.parse(rawArgs) : {};
@@ -423,64 +432,64 @@ export const executeToolCall = async (
       //     clearTimeout(timeout);
       //   }
       // }
-      // case "http_get_json_batch": {
-      //   const { urls, headers } = args as {
-      //     urls: string[];
-      //     headers?: Record<string, string>;
-      //   };
-      //   if (!Array.isArray(urls) || urls.length === 0) {
-      //     return JSON.stringify({
-      //       ok: false,
-      //       error: "No urls provided",
-      //     });
-      //   }
-      //   const qa = AppConfigService.getInstance().getQAConfig();
-      //   const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
-      //   const controller = new AbortController();
-      //   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      //   try {
-      //     const out: any[] = [];
-      //     for (const url of urls) {
-      //       try {
-      //         assertSafeUrl(url);
-      //         const res = await fetch(url, {
-      //           method: "GET",
-      //           headers,
-      //           signal: options?.abortSignal || controller.signal,
-      //         });
-      //         const contentType = res.headers.get("content-type") || "";
-      //         let body: any = null;
-      //         try {
-      //           body = await res.json();
-      //         } catch {
-      //           const text = await res.text();
-      //           body = {
-      //             _nonJsonTextPreview: text.substring(0, 8000),
-      //           };
-      //         }
-      //         out.push({
-      //           ok: res.ok,
-      //           status: res.status,
-      //           contentType,
-      //           url,
-      //           body,
-      //         });
-      //       } catch (e) {
-      //         out.push({
-      //           ok: false,
-      //           status: 0,
-      //           url,
-      //           body: {
-      //             error: e instanceof Error ? e.message : String(e),
-      //           },
-      //         });
-      //       }
-      //     }
-      //     return JSON.stringify({ ok: true, results: out });
-      //   } finally {
-      //     clearTimeout(timeout);
-      //   }
-      // }
+      case "http_get_json_batch": {
+        const { urls, headers } = args as {
+          urls: string[];
+          headers?: Record<string, string>;
+        };
+        if (!Array.isArray(urls) || urls.length === 0) {
+          return JSON.stringify({
+            ok: false,
+            error: "No urls provided",
+          });
+        }
+        const qa = AppConfigService.getInstance().getQAConfig();
+        const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const out: any[] = [];
+          for (const url of urls) {
+            try {
+              assertSafeUrl(url);
+              const res = await fetch(url, {
+                method: "GET",
+                headers,
+                signal: options?.abortSignal || controller.signal,
+              });
+              const contentType = res.headers.get("content-type") || "";
+              let body: any = null;
+              try {
+                body = await res.json();
+              } catch {
+                const text = await res.text();
+                body = {
+                  _nonJsonTextPreview: text.substring(0, 8000),
+                };
+              }
+              out.push({
+                ok: res.ok,
+                status: res.status,
+                contentType,
+                url,
+                body,
+              });
+            } catch (e) {
+              out.push({
+                ok: false,
+                status: 0,
+                url,
+                body: {
+                  error: e instanceof Error ? e.message : String(e),
+                },
+              });
+            }
+          }
+          return JSON.stringify({ ok: true, results: out });
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
       case "web_automation": {
         const { url, actions, options } = args as {
           url: string;
@@ -508,6 +517,20 @@ export const executeToolCall = async (
             timeout?: number;
             waitForNetworkIdle?: boolean;
             includeContent?: boolean;
+            useEnhancedExtraction?: boolean;
+            enhancedExtractionOptions?: {
+              includeHTML?: boolean;
+              includeInteractiveElements?: boolean;
+              maxContentSize?: number;
+              htmlCleaningOptions?: {
+                includeImportantJS?: boolean;
+                preserveCSS?: boolean;
+                includeDataAttributes?: boolean;
+                includeAriaAttributes?: boolean;
+                maxScriptSize?: number;
+                includeEventHandlers?: boolean;
+              };
+            };
           };
         };
 
@@ -536,6 +559,8 @@ export const executeToolCall = async (
                 timeout: options?.timeout || 15000, // Reduced from 30000ms to 15000ms
                 waitForNetworkIdle: options?.waitForNetworkIdle ?? false,
                 includeContent: options?.includeContent ?? true,
+                useEnhancedExtraction: options?.useEnhancedExtraction ?? false,
+                enhancedExtractionOptions: options?.enhancedExtractionOptions,
               },
             },
             sessionId
@@ -548,12 +573,49 @@ export const executeToolCall = async (
             });
           }
 
-          return JSON.stringify({
+          // Console log what content is being returned to the LLM
+          const responseData = {
             ok: true,
             url: result.url,
             pageContent: result.pageContent,
             metadata: result.metadata,
-          });
+          };
+
+          const responseString = JSON.stringify(responseData);
+
+          console.log("\n🎭 [WebAutomation] SENDING TO LLM:");
+          console.log("=".repeat(80));
+          console.log("🌐 RESULT URL:", result.url);
+          console.log(
+            "📄 PAGE CONTENT LENGTH:",
+            result.pageContent?.length || 0,
+            "characters"
+          );
+          console.log(
+            "🔍 CONTENT TYPE:",
+            options?.useEnhancedExtraction ? "Enhanced HTML" : "Basic Text"
+          );
+
+          if (result.pageContent) {
+            console.log("\n📋 PAGE CONTENT PREVIEW:");
+            console.log("-".repeat(40));
+            const preview = result.pageContent.substring(0, 800);
+            console.log(preview);
+          }
+
+          console.log("\n📊 METADATA:");
+          console.log("-".repeat(40));
+          console.log(JSON.stringify(result.metadata, null, 2));
+
+          console.log("\n📐 RESPONSE SIZE:");
+          console.log("-".repeat(40));
+          console.log(`Total Response: ${responseString.length} characters`);
+          console.log(
+            `Page Content: ${result.pageContent?.length || 0} characters`
+          );
+          console.log("=".repeat(80));
+
+          return responseString;
         } catch (error: any) {
           console.error(`❌ [WebAutomation] Error:`, error);
 
@@ -622,6 +684,7 @@ export const runWithToolsIfRequested = async (
         model,
 
         messages,
+        reasoning_effort: "low",
       },
       {
         signal: options?.abortSignal,
@@ -649,7 +712,7 @@ export const runWithToolsIfRequested = async (
     const response = await client.chat.completions.create(
       {
         model,
-
+        reasoning_effort: "low",
         messages,
         tools,
         tool_choice: toolChoice,
@@ -676,7 +739,7 @@ export const runWithToolsIfRequested = async (
       const fallbackResp = await client.chat.completions.create(
         {
           model,
-
+          reasoning_effort: "low",
           messages: [
             ...messages,
             {
@@ -795,7 +858,7 @@ export const runWithToolsIfRequested = async (
   const finalResponse = await client.chat.completions.create(
     {
       model,
-
+      reasoning_effort: "low",
       messages,
 
       // No tools or tool_choice to force a text response

@@ -745,6 +745,11 @@ export class PlaywrightService {
             if (request.options?.useEnhancedExtraction) {
               this.logger.info("Using enhanced content extraction", { sessionId });
 
+              console.log("\n🎭 [Playwright] ENHANCED EXTRACTION REQUESTED:");
+              console.log("=".repeat(60));
+              console.log("🔧 OPTIONS:", JSON.stringify(request.options.enhancedExtractionOptions, null, 2));
+              console.log("=".repeat(60));
+
               const enhancedContent = await this.extractEnhancedPageContent(page, {
                 includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
                 htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
@@ -753,6 +758,20 @@ export class PlaywrightService {
               });
 
               result.pageContent = JSON.stringify(enhancedContent, null, 2);
+
+              console.log("\n🎭 [Playwright] ENHANCED EXTRACTION RESULT:");
+              console.log("=".repeat(60));
+              console.log("📄 Title Length:", enhancedContent.title.length);
+              console.log("📝 Text Length:", enhancedContent.text.length);
+              console.log("🌐 HTML Included:", !!enhancedContent.html);
+              console.log("📏 HTML Size:", enhancedContent.html?.length || 0);
+              console.log("📊 Metadata:", JSON.stringify(enhancedContent.metadata, null, 2));
+              if (enhancedContent.interactiveElements) {
+                console.log("🔘 Forms:", enhancedContent.interactiveElements.forms.length);
+                console.log("🔲 Buttons:", enhancedContent.interactiveElements.buttons.length);
+                console.log("🔗 Links:", enhancedContent.interactiveElements.links.length);
+              }
+              console.log("=".repeat(60));
 
               this.logger.info("Enhanced page content extracted", {
                 sessionId,
@@ -1021,6 +1040,11 @@ export class PlaywrightService {
                 sessionId: actualSessionId 
               });
 
+              console.log("\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION REQUESTED:");
+              console.log("=".repeat(60));
+              console.log("🔧 OPTIONS:", JSON.stringify(request.options.enhancedExtractionOptions, null, 2));
+              console.log("=".repeat(60));
+
               const enhancedContent = await this.extractEnhancedPageContent(page, {
                 includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
                 htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
@@ -1029,6 +1053,20 @@ export class PlaywrightService {
               });
 
               result.pageContent = JSON.stringify(enhancedContent, null, 2);
+
+              console.log("\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION RESULT:");
+              console.log("=".repeat(60));
+              console.log("📄 Title Length:", enhancedContent.title.length);
+              console.log("📝 Text Length:", enhancedContent.text.length);
+              console.log("🌐 HTML Included:", !!enhancedContent.html);
+              console.log("📏 HTML Size:", enhancedContent.html?.length || 0);
+              console.log("📊 Metadata:", JSON.stringify(enhancedContent.metadata, null, 2));
+              if (enhancedContent.interactiveElements) {
+                console.log("🔘 Forms:", enhancedContent.interactiveElements.forms.length);
+                console.log("🔲 Buttons:", enhancedContent.interactiveElements.buttons.length);
+                console.log("🔗 Links:", enhancedContent.interactiveElements.links.length);
+              }
+              console.log("=".repeat(60));
 
               this.logger.info("Enhanced page content extracted", {
                 sessionId: actualSessionId,
@@ -1235,7 +1273,7 @@ export class PlaywrightService {
 
             result.html = aggressiveResult.html.length <= maxContentSize 
               ? aggressiveResult.html 
-              : aggressiveResult.html.substring(0, maxContentSize) + "...[TRUNCATED]";
+              : aggressiveResult.html;
             
             this.logger.warn("HTML was too large, used aggressive cleaning", {
               originalSize: cleaningResult.html.length,

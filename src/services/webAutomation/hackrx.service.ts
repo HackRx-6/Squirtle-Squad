@@ -378,6 +378,22 @@ For each question that involves interacting with the website, use the web_automa
           maxToolLoops: 7,
         });
 
+        // Console log what we're sending to the LLM
+        console.log("\n🤖 [HackRX] SENDING TO LLM:");
+        console.log("=".repeat(80));
+        console.log("📋 SYSTEM PROMPT:");
+        console.log("-".repeat(40));
+        console.log(systemPrompt.substring(0, 500));
+        console.log("\n💬 USER MESSAGE:");
+        console.log("-".repeat(40));
+        console.log(userMessage);
+        console.log("\n🔧 CONFIG:");
+        console.log("-".repeat(40));
+        console.log(`Model: ${llmConfig.primary.model}`);
+        console.log(`Max Tool Loops: 7`);
+        console.log(`Tool Choice: auto`);
+        console.log("=".repeat(80));
+
         const llmStartTime = Date.now();
         const rawResponse = await runWithToolsIfRequested(
           client,
@@ -392,6 +408,19 @@ For each question that involves interacting with the website, use the web_automa
         );
 
         const llmProcessingTime = Date.now() - llmStartTime;
+        
+        // Console log the response from LLM
+        console.log("\n🤖 [HackRX] RECEIVED FROM LLM:");
+        console.log("=".repeat(80));
+        console.log("📝 RAW RESPONSE:");
+        console.log("-".repeat(40));
+        console.log(rawResponse.substring(0, 1000));
+        console.log("\n📊 RESPONSE STATS:");
+        console.log("-".repeat(40));
+        console.log(`Processing Time: ${llmProcessingTime}ms`);
+        console.log(`Response Length: ${rawResponse.length} characters`);
+        console.log("=".repeat(80));
+
         this.logger.info("LLM processing completed", {
           sessionId,
           processingTimeMs: llmProcessingTime,
