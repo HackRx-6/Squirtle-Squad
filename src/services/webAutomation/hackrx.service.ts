@@ -133,21 +133,26 @@ export class HackRXService {
 
 ## CODING WORKFLOW:
 When asked to solve coding problems:
-1. Write the code using execute_terminal_command to create files
-2. Test the code with provided examples immediately
+1. Write JAVASCRIPT code using execute_terminal_command to create .js files
+2. Test the code with provided examples immediately using Node.js
 3. If errors occur, debug and fix them
 4. Once working, ALWAYS commit and push to Git (mandatory step)
 5. Only after Git push is complete, provide the final answer based on actual execution results
 
 ## GIT OPERATIONS:
 For Git tasks, use execute_terminal_command to:
-- Create directories: mkdir ROUND_6
-- Write files: cat > filename.js << 'EOF' [code] EOF
-- Add files: git add .
-- Commit: git commit -m "Add ROUND_6 solution"
-- Push: git push origin main
+- Create directories: mkdir folder_name
+- Write ONE file only: cat > folder_name/file.js << 'EOF' [code] EOF
+- If errors occur, MODIFY the same file, don't create new files
+- Add files: git add folder_name/
+- Commit: git commit -m "Add folder_name solution"  
+- Push: git push
 
-MANDATORY SEQUENCE: Create → Test → Debug if needed → Add → Commit → Push → THEN respond with answers
+IMPORTANT: Use ONLY ONE FILE. Never create multiple files.
+
+MANDATORY SEQUENCE: Create ONE JS file → Test with Node.js → Debug SAME file if needed → git add → git commit → git push → THEN respond with answers
+
+CRITICAL: ALWAYS complete git commit AND git push. Don't stop at git add.
 
 ## RESPONSE FORMAT:
 - For multiple questions: "ANSWER 1: [actual result]", "ANSWER 2: [actual result]"
@@ -166,7 +171,11 @@ CRITICAL: Execute every step completely. Test code immediately. Fix errors. Comp
 Questions/Tasks:
 ${questionsText}
 
-IMPORTANT: If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
+IMPORTANT: 
+1. Write JAVASCRIPT code only (use Node.js for execution)
+2. Use ONLY ONE FILE: ROUND_6/solution.js (never create multiple files like .cjs, app.js, etc.)
+3. If errors occur, MODIFY the same file, don't create new files
+4. If the task involves pushing code to Git/GitHub, you MUST complete ALL Git operations (git add, git commit, git push) BEFORE providing your final answer. This is mandatory, not optional.
 
 Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
   }
