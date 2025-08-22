@@ -6,6 +6,7 @@ import { streamingService } from "./streaming.LLM";
 import type { LLMProvider } from "./types";
 import type { TimerContext } from "../timer";
 import { runWithToolsIfRequested, getRecommendedToolChoice } from "./tools.LLM";
+import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 
 export class LLMService implements LLMProvider {
   private primaryClient: OpenAI;
@@ -214,11 +215,31 @@ export class LLMService implements LLMProvider {
 
           console.log(`🤖 Generating response with primary LLM...`);
 
+          // Clean prompts for security before sending to LLM
+          const cleanedSystemPrompt = PromptInjectionProtectionService.sanitizeText(systemPrompt, {
+            strictMode: true,
+            azureContentPolicy: true,
+            logSuspiciousContent: true
+          });
+          
+          const cleanedUserMessage = PromptInjectionProtectionService.sanitizeText(userMessage, {
+            strictMode: true,
+            azureContentPolicy: true,
+            logSuspiciousContent: true
+          });
+
+          this.logger.debug("Prompts cleaned for security", {
+            originalSystemLength: systemPrompt.length,
+            cleanedSystemLength: cleanedSystemPrompt.length,
+            originalUserLength: userMessage.length,
+            cleanedUserLength: cleanedUserMessage.length,
+          });
+
           const textOutput = await runWithToolsIfRequested(
             this.primaryClient,
             this.primaryConfig.model,
-            systemPrompt,
-            userMessage,
+            cleanedSystemPrompt,
+            cleanedUserMessage,
             {
               toolChoice: getRecommendedToolChoice(),
               maxToolLoops: 3, // Reasonable default for production
@@ -1083,11 +1104,24 @@ export class LLMService implements LLMProvider {
                 }`
               );
 
+              // Clean prompts for security before sending to LLM
+              const cleanedSystemPrompt = PromptInjectionProtectionService.sanitizeText(systemPrompt, {
+                strictMode: true,
+                azureContentPolicy: true,
+                logSuspiciousContent: false // Reduce logging in batch mode
+              });
+              
+              const cleanedUserMessage = PromptInjectionProtectionService.sanitizeText(userMessage, {
+                strictMode: true,
+                azureContentPolicy: true,
+                logSuspiciousContent: false
+              });
+
               const textOutput = await runWithToolsIfRequested(
                 client,
                 config.model,
-                systemPrompt,
-                userMessage,
+                cleanedSystemPrompt,
+                cleanedUserMessage,
                 {
                   toolChoice: getRecommendedToolChoice(),
                   maxToolLoops: 3,

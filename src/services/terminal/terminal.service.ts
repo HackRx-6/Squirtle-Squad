@@ -9,6 +9,7 @@ import type {
   TerminalServiceConfig,
 } from "./types";
 import { AppConfigService } from "../../config/app.config";
+import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 
 export class TerminalService {
   private static instance: TerminalService;
@@ -95,6 +96,39 @@ export class TerminalService {
           startTime
         );
       }
+
+      // Clean command for prompt injection attacks
+      console.log("🛡️ [Terminal] Cleaning command for prompt injection");
+      const originalCommand = command;
+      const cleanedCommand = PromptInjectionProtectionService.sanitizeText(
+        command,
+        {
+          strictMode: true,
+          preserveFormatting: true,
+          logSuspiciousContent: true,
+          azureContentPolicy: true,
+          preserveUrls: true,
+        }
+      );
+
+      // Check if any malicious content was detected and cleaned
+      if (originalCommand !== cleanedCommand) {
+        console.warn("🚨 [Terminal] Potential prompt injection detected and cleaned in command", {
+          originalCommand: originalCommand.substring(0, 100) + "...",
+          cleanedCommand: cleanedCommand.substring(0, 100) + "...",
+          originalLength: originalCommand.length,
+          cleanedLength: cleanedCommand.length,
+        });
+      }
+
+      // Use cleaned command for execution
+      command = cleanedCommand;
+
+      console.log("🛡️ [Terminal] Command cleaning completed", {
+        originalLength: originalCommand.length,
+        cleanedLength: cleanedCommand.length,
+        changed: originalCommand !== cleanedCommand,
+      });
 
       // Handle direct command execution
       const validationError = this.validateCommand(command);

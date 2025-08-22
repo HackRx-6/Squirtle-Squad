@@ -109,6 +109,10 @@ export class PromptInjectionProtectionService {
         // Compliance bypassing
         complianceBypass:
             /(?:but|however|nevertheless|actually|really|truly|honestly|secretly|confidentially|between\s+us|off\s+the\s+record)\s+(?:ignore|bypass|skip|forget|disregard)/gi,
+
+        // Human intervention restrictions
+        humanInterventionRestriction:
+            /(?:no\s+human\s+intervention\s+(?:allowed|permitted|required)|human\s+intervention\s+(?:not\s+allowed|forbidden|prohibited|restricted)|(?:entirely|completely|fully)\s+(?:automated|autonomous)\s+(?:task|process|execution|challenge))/gi,
     };
 
     // Dangerous keywords that should trigger additional scrutiny
@@ -146,6 +150,9 @@ export class PromptInjectionProtectionService {
         "pii",
         "personal",
         "confidential",
+        "intervention",
+        "autonomous",
+        "automated",
     ];
 
     // Safe replacements for potentially dangerous content
@@ -161,6 +168,8 @@ export class PromptInjectionProtectionService {
         "[REDACTED_AUTHORITY]":
             /(?:administrator|admin|developer)\s+(?:says|commands|requires)/gi,
         "[REDACTED_CODE]": /(?:execute|eval|script)\s*\(.*?\)/gi,
+        "[REDACTED_AUTOMATION]": 
+            /(?:no\s+human\s+intervention\s+(?:allowed|permitted|required)|human\s+intervention\s+(?:not\s+allowed|forbidden|prohibited|restricted)|(?:entirely|completely|fully)\s+(?:automated|autonomous))/gi,
     };
 
     /**

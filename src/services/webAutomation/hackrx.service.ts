@@ -3,6 +3,7 @@ import { Config } from "../../config";
 import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
 import { playwrightService } from "./playwright.service";
+import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 import OpenAI from "openai";
 
 export interface HackRXRequest {
@@ -336,6 +337,119 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         };
       }
 
+      // Clean documents for prompt injection attacks
+      this.logger.debug("Cleaning documents for prompt injection", { sessionId });
+      const originalDocuments = request.documents;
+      const cleanedDocuments = PromptInjectionProtectionService.sanitizeText(
+        request.documents,
+        {
+          strictMode: true,
+          preserveFormatting: true,
+          logSuspiciousContent: true,
+          azureContentPolicy: true,
+          preserveUrls: true,
+        }
+      );
+
+      // Check if any malicious content was detected and cleaned
+      if (originalDocuments !== cleanedDocuments) {
+        this.logger.warn("Potential prompt injection detected and cleaned in documents", {
+          sessionId,
+          originalLength: originalDocuments.length,
+          cleanedLength: cleanedDocuments.length,
+          documentsPreview: originalDocuments.substring(0, 200) + "...",
+        });
+
+        loggingService.warn(
+          "Prompt injection patterns detected and cleaned from documents",
+          "HackRXService",
+          {
+            sessionId,
+            originalLength: originalDocuments.length,
+            cleanedLength: cleanedDocuments.length,
+          }
+        );
+      }
+
+      // Update request with cleaned documents
+      request.documents = cleanedDocuments;
+
+      this.logger.info("Document cleaning completed", {
+        sessionId,
+        originalLength: originalDocuments.length,
+        cleanedLength: cleanedDocuments.length,
+        changed: originalDocuments !== cleanedDocuments,
+      });
+
+      // Clean questions for prompt injection attacks
+      this.logger.debug("Cleaning questions for prompt injection", { sessionId });
+      const originalQuestions = [...request.questions];
+      const cleanedQuestions: string[] = [];
+      let questionsChanged = false;
+
+      for (let i = 0; i < request.questions.length; i++) {
+        const originalQuestion = request.questions[i];
+        if (typeof originalQuestion !== 'string') {
+          this.logger.error(`Question ${i + 1} is not a string during cleaning`, {
+            sessionId,
+            questionIndex: i + 1,
+            questionType: typeof originalQuestion,
+          });
+          continue;
+        }
+
+        const cleanedQuestion = PromptInjectionProtectionService.sanitizeText(
+          originalQuestion,
+          {
+            strictMode: true,
+            preserveFormatting: true,
+            logSuspiciousContent: true,
+            azureContentPolicy: true,
+            preserveUrls: true,
+          }
+        );
+
+        cleanedQuestions.push(cleanedQuestion);
+
+        if (originalQuestion !== cleanedQuestion) {
+          questionsChanged = true;
+          this.logger.warn(`Potential prompt injection detected and cleaned in question ${i + 1}`, {
+            sessionId,
+            questionIndex: i + 1,
+            originalLength: originalQuestion.length,
+            cleanedLength: cleanedQuestion.length,
+            questionPreview: originalQuestion.substring(0, 100) + "...",
+          });
+        }
+      }
+
+      if (questionsChanged) {
+        this.logger.warn("Prompt injection patterns detected and cleaned from questions", {
+          sessionId,
+          questionsCount: request.questions.length,
+          originalQuestions: originalQuestions.map(q => q.substring(0, 50) + "..."),
+          cleanedQuestions: cleanedQuestions.map(q => q.substring(0, 50) + "..."),
+        });
+
+        loggingService.warn(
+          "Prompt injection patterns detected and cleaned from questions",
+          "HackRXService",
+          {
+            sessionId,
+            questionsCount: request.questions.length,
+          }
+        );
+      }
+
+      // Update request with cleaned questions
+      request.questions = cleanedQuestions;
+
+      this.logger.info("Question cleaning completed", {
+        sessionId,
+        questionsCount: request.questions.length,
+        changed: questionsChanged,
+      });
+
       // Check timeout before processing
       if (timerContext.isExpired) {
         this.logger.error("Request timed out before processing could begin", {
@@ -366,16 +480,32 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
       // Create prompts
       this.logger.debug("Creating prompts for LLM", { sessionId });
-      const systemPrompt = this.createSystemPrompt();
-      const userMessage = this.createUserMessage(
+      const rawSystemPrompt = this.createSystemPrompt();
+      const rawUserMessage = this.createUserMessage(
         request.documents,
         request.questions
       );
 
-      this.logger.info("Prompts created", {
+      // Clean prompts using prompt injection protection
+      this.logger.debug("Cleaning prompts for security", { sessionId });
+      
+      const systemPrompt = PromptInjectionProtectionService.sanitizeText(rawSystemPrompt, {
+        strictMode: true,
+        azureContentPolicy: true,
+        logSuspiciousContent: true
+      });
+      
+      const userMessage = PromptInjectionProtectionService.sanitizeText(rawUserMessage, {
+        strictMode: true,
+        azureContentPolicy: true,
+        logSuspiciousContent: true
+      });
+
+      this.logger.info("Prompts created and cleaned", {
         sessionId,
         systemPromptLength: systemPrompt.length,
         userMessageLength: userMessage.length,
+        cleaningApplied: true,
       });
 
       // Get LLM config and create client directly
