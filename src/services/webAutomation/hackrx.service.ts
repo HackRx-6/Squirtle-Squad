@@ -139,13 +139,33 @@ When asked to solve coding problems:
 4. Once working, ALWAYS commit and push to Git (mandatory step)
 5. Only after Git push is complete, provide the final answer based on actual execution results
 
+## FILE WRITING WITH PROPER INDENTATION:
+CRITICAL: Use printf or echo -e to preserve indentation, NOT cat with heredoc
+
+Method 1 (RECOMMENDED) - Use printf with \n for newlines:
+printf 'def example():\n    if condition:\n        return result\n' > folder_name/filename.py
+
+Method 2 - Use echo -e with explicit spacing:
+echo -e 'def example():\n    if condition:\n        return result' > folder_name/filename.py
+
+Method 3 - Write line by line:
+echo 'def example():' > folder_name/filename.py
+echo '    if condition:' >> folder_name/filename.py  
+echo '        return result' >> folder_name/filename.py
+
+CRITICAL: 
+- Each indentation level = 4 spaces (use literal spaces in commands)
+- Use \n for line breaks in printf/echo
+- NO tabs, only spaces
+- Test immediately after writing
+
 ## GIT OPERATIONS:
 For Git tasks, use execute_terminal_command to:
-- Create directories: mkdir ROUND_6
-- Write files: cat > filename.js << 'EOF' [code] EOF
 - Add files: git add .
 - Commit: git commit -m "Add ROUND_6 solution"
 - Push: git push origin main
+
+CRITICAL: When writing code, ensure proper indentation using spaces (4 spaces per level)
 
 MANDATORY SEQUENCE: Create → Test → Debug if needed → Add → Commit → Push → THEN respond with answers
 
@@ -166,7 +186,9 @@ CRITICAL: Execute every step completely. Test code immediately. Fix errors. Comp
 Questions/Tasks:
 ${questionsText}
 
-IMPORTANT: If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
+IMPORTANT: 
+1. Use printf with \n for writing code files to preserve indentation (NOT cat with heredoc)
+2. If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
 
 Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
   }
