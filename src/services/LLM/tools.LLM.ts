@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { AppConfigService } from "../../config/app.config";
 import { playwrightService } from "../webAutomation";
+import { terminalService } from "../terminal";
 
 type OpenAITool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ToolChoice =
@@ -282,6 +283,60 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
         },
       },
     },
+    {
+      type: "function",
+      function: {
+        name: "execute_terminal_command",
+        description:
+          "Execute a terminal command or download and run code files from URLs. Use this when you need to: 1) Run system commands, check file contents, install packages, run scripts, or perform terminal operations, 2) Download and execute code files from URLs (supports .js, .py, .ts, .sh files with automatic runtime detection). The execution is secure with timeout controls and output limits.",
+        parameters: {
+          type: "object",
+          properties: {
+            command: {
+              type: "string",
+              description: "The terminal command to execute (e.g., 'ls -la', 'npm install', 'cat file.txt'). Not required when using fileUrl.",
+            },
+            options: {
+              type: "object",
+              description: "Optional execution parameters",
+              properties: {
+                timeout: {
+                  type: "number",
+                  description: "Timeout in milliseconds (default: 30000)",
+                },
+                workingDirectory: {
+                  type: "string", 
+                  description: "Working directory for command execution",
+                },
+                environment: {
+                  type: "object",
+                  description: "Environment variables to set",
+                  additionalProperties: { type: "string" },
+                },
+                shell: {
+                  type: "string",
+                  description: "Shell to use for execution (default: system default)",
+                },
+                maxOutputSize: {
+                  type: "number",
+                  description: "Maximum output size in bytes (default: 1MB)",
+                },
+                fileUrl: {
+                  type: "string",
+                  description: "URL to download and execute a code file (supports .js, .py, .ts, .sh files)",
+                },
+                runtime: {
+                  type: "string",
+                  enum: ["auto", "node", "python", "bash", "deno", "bun"],
+                  description: "Runtime to use for file execution (default: auto-detect from file extension)",
+                },
+              },
+            },
+          },
+          required: [],
+        },
+      },
+    },
   ];
   return tools;
 };
@@ -494,6 +549,78 @@ export const executeToolCall = async (
           return JSON.stringify({
             ok: false,
             error: error.message || "Unknown web automation error",
+          });
+        }
+      }
+      case "execute_terminal_command": {
+        const { command, options = {} } = args as {
+          command?: string;
+          options?: {
+            timeout?: number;
+            workingDirectory?: string;
+            environment?: Record<string, string>;
+            shell?: string;
+            maxOutputSize?: number;
+            fileUrl?: string;
+            runtime?: 'auto' | 'node' | 'python' | 'bash' | 'deno' | 'bun';
+          };
+        };
+
+        // Validate that either command or fileUrl is provided
+        if (!command && !options.fileUrl) {
+          return JSON.stringify({
+            ok: false,
+            error: "Either 'command' or 'options.fileUrl' must be provided",
+          });
+        }
+
+        if (command && typeof command !== "string") {
+          return JSON.stringify({
+            ok: false,
+            error: "Invalid command: must be a string",
+          });
+        }
+
+        try {
+          if (options.fileUrl) {
+            console.log(`🖥️ [TerminalTool] Executing file from URL: ${options.fileUrl}`);
+          } else {
+            console.log(`🖥️ [TerminalTool] Executing command: ${command}`);
+          }
+          
+          const result = await terminalService.executeCommand(command || '', {
+            timeout: options.timeout,
+            workingDirectory: options.workingDirectory,
+            environment: options.environment,
+            shell: options.shell,
+            maxOutputSize: options.maxOutputSize,
+            fileUrl: options.fileUrl,
+            runtime: options.runtime,
+          });
+
+          console.log(`🖥️ [TerminalTool] Command completed - Success: ${result.success}, Exit Code: ${result.exitCode}`);
+          console.log(`🖥️ [TerminalTool] Execution time: ${result.executionTime}ms`);
+          console.log(`🖥️ [TerminalTool] Output length: ${result.stdout.length} chars`);
+
+          return JSON.stringify({
+            ok: result.success,
+            result: {
+              success: result.success,
+              stdout: result.stdout,
+              stderr: result.stderr,
+              exitCode: result.exitCode,
+              command: result.command,
+              workingDirectory: result.workingDirectory,
+              executionTime: result.executionTime,
+              timedOut: result.timedOut,
+              error: result.error,
+            },
+          });
+        } catch (error: any) {
+          console.error(`❌ [TerminalTool] Error executing command:`, error);
+          return JSON.stringify({
+            ok: false,
+            error: error.message || "Failed to execute terminal command",
           });
         }
       }
