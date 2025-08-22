@@ -243,6 +243,7 @@ export { urlDetectionService } from "./urlDetection.webScraping";
 export { coreWebScrapingService } from "./coreWebScraping.webScraping";
 export { linkedContentCache } from "./linkedContentCache.webScraping";
 export { webQAService } from "./webQA.webScraping";
+export { enhancedWebScrapingService } from "./enhanced.webScraping";
 
 // Export types
 export * from "./types";
@@ -252,3 +253,4 @@ export { UrlDetectionService } from "./urlDetection.webScraping";
 export { CoreWebScrapingService } from "./coreWebScraping.webScraping";
 export { LinkedContentCacheService } from "./linkedContentCache.webScraping";
 export { WebQAService } from "./webQA.webScraping";
+export { EnhancedWebScrapingService } from "./enhanced.webScraping";
