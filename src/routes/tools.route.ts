@@ -2,6 +2,37 @@ import { Elysia } from "elysia";
 import { toolsController } from "../controllers/tools.controller";
 
 export const toolsRoute = (app: Elysia) => {
+  // Debug endpoint to check environment variables
+  app.get("/api/v1/tools/debug/config", () => {
+    const { Config } = require("../config");
+    try {
+      const aiConfig = Config.ai;
+      const llmConfig = aiConfig.getLLMConfig();
+      
+      return {
+        success: true,
+        config: {
+          hasApiKey: !!llmConfig.primary.apiKey,
+          apiKeyPrefix: llmConfig.primary.apiKey ? llmConfig.primary.apiKey.substring(0, 12) + "..." : "not set",
+          baseURL: llmConfig.primary.baseURL || "not set",
+          model: llmConfig.primary.model || "not set",
+          service: llmConfig.primary.service || "not set",
+        },
+        envVars: {
+          LLM_API_KEY: process.env.LLM_API_KEY ? process.env.LLM_API_KEY.substring(0, 12) + "..." : "not set",
+          LLM_BASE_URL: process.env.LLM_BASE_URL || "not set",
+          LLM_MODEL: process.env.LLM_MODEL || "not set",
+          LLM_SERVICE: process.env.LLM_SERVICE || "not set",
+        }
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  });
+
   // Tools HackRX endpoint
   app.post(
     "/api/v1/tools/hackrx/run",
