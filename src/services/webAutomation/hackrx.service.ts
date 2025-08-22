@@ -102,6 +102,15 @@ Available actions for web_automation tool:
 - scroll: Scroll the page or scroll to a specific element
 - hover: Hover over an element
 - select: Select an option from a dropdown
+- fill_form: Fill multiple form fields at once (requires formData object with selector:value pairs)
+- submit_form: Submit a form by clicking submit button (optional submitSelector)
+- find_and_fill: Intelligently find and fill input fields (tries multiple selector strategies)
+
+Form Interaction Examples:
+- To fill a single input: use "type" action with selector and text
+- To fill multiple inputs: use "fill_form" with formData: {"#email": "user@example.com", "#password": "secret"}
+- To submit: use "submit_form" (automatically finds submit buttons) or "click" with specific button selector
+- To find inputs by name/placeholder: use "find_and_fill" with partial names (e.g., "email" will find input[name*="email"])
 
 When using selectors:
 - Use specific and reliable CSS selectors

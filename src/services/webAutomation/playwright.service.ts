@@ -98,6 +98,66 @@ export class PlaywrightService {
         await page.selectOption(action.selector, action.text);
         break;
 
+      case "fill_form":
+        if (!action.formData)
+          throw new Error("Form data required for fill_form action");
+
+        // Fill multiple form fields
+        for (const [selector, value] of Object.entries(action.formData)) {
+          await page.waitForSelector(selector, { timeout });
+          await page.fill(selector, value);
+        }
+        break;
+
+      case "submit_form":
+        const submitSelector =
+          action.submitSelector ||
+          'input[type="submit"], button[type="submit"], button:has-text("Submit")';
+        await page.waitForSelector(submitSelector, { timeout });
+        await page.click(submitSelector);
+        break;
+
+      case "find_and_fill":
+        if (!action.selector || !action.text)
+          throw new Error(
+            "Selector and text required for find_and_fill action"
+          );
+
+        // More intelligent input finding
+        try {
+          await page.waitForSelector(action.selector, { timeout });
+        } catch {
+          // If exact selector fails, try common input selectors
+          const commonSelectors = [
+            `input[name*="${action.selector}"]`,
+            `input[id*="${action.selector}"]`,
+            `input[placeholder*="${action.selector}"]`,
+            `textarea[name*="${action.selector}"]`,
+            `textarea[id*="${action.selector}"]`,
+          ];
+
+          let found = false;
+          for (const fallbackSelector of commonSelectors) {
+            try {
+              await page.waitForSelector(fallbackSelector, { timeout: 2000 });
+              action.selector = fallbackSelector;
+              found = true;
+              break;
+            } catch {
+              continue;
+            }
+          }
+
+          if (!found) {
+            throw new Error(
+              `Could not find input element matching: ${action.selector}`
+            );
+          }
+        }
+
+        await page.fill(action.selector, action.text);
+        break;
+
       default:
         throw new Error(`Unknown action type: ${action.type}`);
     }

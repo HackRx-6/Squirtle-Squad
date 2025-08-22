@@ -132,6 +132,9 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                       "navigate",
                       "select",
                       "hover",
+                      "fill_form",
+                      "submit_form",
+                      "find_and_fill",
                     ],
                     description: "The type of action to perform",
                   },
@@ -153,6 +156,16 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                   timeout: {
                     type: "number",
                     description: "Timeout in milliseconds for this action",
+                  },
+                  formData: {
+                    type: "object",
+                    description:
+                      "Key-value pairs of CSS selector to input value for fill_form action",
+                  },
+                  submitSelector: {
+                    type: "string",
+                    description:
+                      "CSS selector for submit button (optional for submit_form action)",
                   },
                 },
                 required: ["type"],
@@ -366,11 +379,16 @@ export const executeToolCall = async (
               | "scroll"
               | "navigate"
               | "select"
-              | "hover";
+              | "hover"
+              | "fill_form"
+              | "submit_form"
+              | "find_and_fill";
             selector?: string;
             text?: string;
             url?: string;
             timeout?: number;
+            formData?: Record<string, string>;
+            submitSelector?: string;
           }>;
           options?: {
             headless?: boolean;

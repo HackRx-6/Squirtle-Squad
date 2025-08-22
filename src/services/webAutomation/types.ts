@@ -1,10 +1,23 @@
 export interface WebAutomationAction {
-  type: "click" | "type" | "wait" | "scroll" | "navigate" | "select" | "hover";
+  type:
+    | "click"
+    | "type"
+    | "wait"
+    | "scroll"
+    | "navigate"
+    | "select"
+    | "hover"
+    | "fill_form"
+    | "submit_form"
+    | "find_and_fill";
   selector?: string;
   text?: string;
   url?: string;
   timeout?: number;
   options?: Record<string, any>;
+  // For form-specific actions
+  formData?: Record<string, string>; // For fill_form action
+  submitSelector?: string; // For submit_form action
 }
 
 export interface WebAutomationResult {
