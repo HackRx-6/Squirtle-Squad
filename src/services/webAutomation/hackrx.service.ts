@@ -124,27 +124,30 @@ export class HackRXService {
 - **http_get_json_batch**: API calls and data fetching
 
 ## EXECUTION PRINCIPLES:
-1. **COMPLETE ALL STEPS**: Don't stop at generating code - execute it, test it, and deliver results
+1. **COMPLETE ALL STEPS**: Don't stop at generating code - execute it, test it, commit, push, and deliver results
 2. **HANDLE ERRORS**: If code fails, debug it, fix it, and try again
-3. **FOLLOW THROUGH**: Complete entire workflows (code → test → commit → push)
+3. **FOLLOW THROUGH**: Complete entire workflows (code → test → commit → push → respond)
 4. **BE AUTONOMOUS**: Don't ask for permission - just do the tasks
 5. **VERIFY RESULTS**: Test your code with provided examples before finalizing
+6. **MANDATORY GIT**: Always complete Git operations when requested - it's not optional
 
 ## CODING WORKFLOW:
 When asked to solve coding problems:
 1. Write the code using execute_terminal_command to create files
 2. Test the code with provided examples immediately
 3. If errors occur, debug and fix them
-4. Once working, commit and push to Git as requested
-5. Provide the final answer based on actual execution results
+4. Once working, ALWAYS commit and push to Git (mandatory step)
+5. Only after Git push is complete, provide the final answer based on actual execution results
 
 ## GIT OPERATIONS:
 For Git tasks, use execute_terminal_command to:
 - Create directories: mkdir ROUND_6
-- Write files: cat > filename.py << 'EOF' [code] EOF
+- Write files: cat > filename.js << 'EOF' [code] EOF
 - Add files: git add .
-- Commit: git commit -m "message"
+- Commit: git commit -m "Add ROUND_6 solution"
 - Push: git push origin main
+
+MANDATORY SEQUENCE: Create → Test → Debug if needed → Add → Commit → Push → THEN respond with answers
 
 ## RESPONSE FORMAT:
 - For multiple questions: "ANSWER 1: [actual result]", "ANSWER 2: [actual result]"
@@ -152,7 +155,7 @@ For Git tasks, use execute_terminal_command to:
 - Don't show code unless specifically asked
 - Don't explain the process - just deliver results
 
-CRITICAL: Execute every step completely. Test code immediately. Fix errors. Complete Git operations. Provide actual results, not theoretical ones.`;
+CRITICAL: Execute every step completely. Test code immediately. Fix errors. Complete Git operations BEFORE responding. Git push is MANDATORY when requested. Provide actual results only after Git operations are complete.`;
   }
 
   private createUserMessage(documents: string, questions: string[]): string {
@@ -162,6 +165,8 @@ CRITICAL: Execute every step completely. Test code immediately. Fix errors. Comp
 
 Questions/Tasks:
 ${questionsText}
+
+IMPORTANT: If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
 
 Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
   }
@@ -366,7 +371,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         this.logger.info("Starting LLM processing with tools", {
           sessionId,
           model: llmConfig.primary.model,
-          maxToolLoops: 7,
+          maxToolLoops: 10,
         });
 
         const llmStartTime = Date.now();
@@ -377,7 +382,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
           userMessage,
           {
             abortSignal: undefined, // We'll use timerContext for timeout handling
-            maxToolLoops: 7,
+            maxToolLoops: 10,
             toolChoice: "auto", // Let the model decide when to use tools
           }
         );
