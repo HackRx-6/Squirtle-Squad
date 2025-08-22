@@ -377,9 +377,7 @@ export class PlaywrightService {
             });
           } else {
             this.logger.info("Scrolling to bottom of page", { actionId });
-            await page.evaluate(() =>
-              window.scrollTo(0, document.body.scrollHeight)
-            );
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)");
             this.logger.info("Scrolled to bottom of page", { actionId });
           }
           break;
