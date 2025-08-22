@@ -6,14 +6,14 @@ import { playwrightService } from "./playwright.service";
 import OpenAI from "openai";
 
 export interface HackRXRequest {
-  url: string;
+  documents: string;
   questions: string[];
 }
 
 export interface HackRXResponse {
   answers: string[];
   metadata?: {
-    url?: string;
+    documents?: string;
     processedAt: number;
     toolsUsed: boolean;
   };
@@ -50,19 +50,19 @@ export class HackRXService {
     error?: HackRXError;
   } {
     this.logger.debug("Validating HackRX request", {
-      url: request.url,
+      documents: request.documents,
       questionsCount: request.questions?.length || 0,
     });
 
-    if (!request.url || typeof request.url !== "string") {
-      this.logger.warn("Validation failed: Invalid URL provided", {
-        url: request.url,
-        urlType: typeof request.url,
+    if (!request.documents || typeof request.documents !== "string") {
+      this.logger.warn("Validation failed: Invalid documents provided", {
+        documents: request.documents,
+        documentsType: typeof request.documents,
       });
       return {
         isValid: false,
         error: {
-          error: "Invalid URL provided",
+          error: "Invalid documents provided",
           errorType: "validation",
         },
       };
@@ -108,7 +108,7 @@ export class HackRXService {
     }
 
     this.logger.debug("Request validation successful", {
-      url: request.url,
+      documents: request.documents,
       questionsCount: request.questions.length,
     });
 
@@ -164,10 +164,10 @@ Always provide clear, helpful answers based on the actual page content you recei
 If an action fails, explain what went wrong and suggest alternatives.`;
   }
 
-  private createUserMessage(url: string, questions: string[]): string {
+  private createUserMessage(documents: string, questions: string[]): string {
     const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join("\n");
 
-    return `Website URL: ${url}
+    return `Documents/Website URL: ${documents}
 
 Please help me with these questions/tasks:
 ${questionsText}
@@ -283,7 +283,7 @@ For each question that involves interacting with the website, use the web_automa
 
     this.logger.info("Starting HackRX processing session", {
       sessionId,
-      url: request.url,
+      documents: request.documents,
       questionsCount: request.questions.length,
       questions: request.questions.map(
         (q, i) =>
@@ -331,7 +331,7 @@ For each question that involves interacting with the website, use the web_automa
       }
 
       loggingService.info(
-        `Starting HackRX processing for ${request.url}`,
+        `Starting HackRX processing for ${request.documents}`,
         "HackRXService",
         {
           sessionId,
@@ -343,7 +343,7 @@ For each question that involves interacting with the website, use the web_automa
       this.logger.debug("Creating prompts for LLM", { sessionId });
       const systemPrompt = this.createSystemPrompt();
       const userMessage = this.createUserMessage(
-        request.url,
+        request.documents,
         request.questions
       );
 
@@ -432,7 +432,7 @@ For each question that involves interacting with the website, use the web_automa
         const result: HackRXResponse = {
           answers,
           metadata: {
-            url: request.url,
+            documents: request.documents,
             processedAt: Date.now(),
             toolsUsed: true,
           },
@@ -457,7 +457,7 @@ For each question that involves interacting with the website, use the web_automa
           answersCount: answers.length,
           totalProcessingTimeMs: totalProcessingTime,
           llmProcessingTimeMs: llmProcessingTime,
-          finalUrl: request.url,
+          finalDocuments: request.documents,
         });
 
         return {

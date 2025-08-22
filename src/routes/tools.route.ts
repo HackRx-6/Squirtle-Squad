@@ -141,9 +141,9 @@ export const toolsRoute = (app: Elysia) => {
         body: {
           type: "object",
           properties: {
-            url: {
+            documents: {
               type: "string",
-              description: "URL to the image or document to process",
+              description: "Documents or URL to the image or document to process",
               example:
                 "https://hackrx.blob.core.windows.net/assets/Test%20/image.jpeg?sv=2023-01-03&spr=https&st=2025-08-04T19%3A29%3A01Z&se=2026-08-05T19%3A29%3A00Z&sr=b&sp=r&sig=YnJJThygjCT6%2FpNtY1aHJEZ%2F%2BqHoEB59TRGPSxJJBwo%3D",
             },
@@ -162,7 +162,7 @@ export const toolsRoute = (app: Elysia) => {
               ],
             },
           },
-          required: ["url", "questions"],
+          required: ["documents", "questions"],
         },
         response: {
           200: {
@@ -267,7 +267,7 @@ export const toolsRoute = (app: Elysia) => {
               ],
             },
           },
-          required: ["url", "questions"],
+          required: ["documents", "questions"],
         },
         response: {
           200: {
@@ -412,7 +412,7 @@ export const toolsRoute = (app: Elysia) => {
               },
             },
           },
-          required: ["url", "questions"],
+          required: ["documents", "questions"],
         },
         response: {
           200: {

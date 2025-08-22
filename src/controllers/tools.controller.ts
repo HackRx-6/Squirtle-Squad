@@ -65,10 +65,10 @@ export const toolsController = {
           }
 
           // Validate required fields
-          const { url, questions } = body;
+          const { documents, questions } = body;
 
-          if (!url) {
-            throw new ApiError(400, "Missing required field: url");
+          if (!documents) {
+            throw new ApiError(400, "Missing required field: documents");
           }
 
           if (!questions || !Array.isArray(questions)) {
@@ -127,7 +127,7 @@ export const toolsController = {
 
           // Use the dedicated HackRX service with LLM and web automation tools
           const result = await hackrxService.processHackRX(
-            { url, questions },
+            { documents, questions },
             timerContext
           );
 
@@ -281,10 +281,10 @@ export const toolsController = {
           }
 
           // Validate required fields
-          const { url, questions } = body;
+          const { documents, questions } = body;
 
-          if (!url) {
-            throw new ApiError(400, "Missing required field: url");
+          if (!documents) {
+            throw new ApiError(400, "Missing required field: documents");
           }
 
           if (!questions || !Array.isArray(questions)) {
@@ -478,8 +478,8 @@ export const toolsController = {
           // Validate required fields
           const { url, questions, cleaningOptions } = body;
 
-          if (!url) {
-            throw new ApiError(400, "Missing required field: url");
+          if (!documents) {
+            throw new ApiError(400, "Missing required field: documents");
           }
 
           if (!questions || !Array.isArray(questions)) {
