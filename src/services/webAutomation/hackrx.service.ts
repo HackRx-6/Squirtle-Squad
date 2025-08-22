@@ -299,6 +299,11 @@ Each answer should be on its own line and directly address the specific question
       const aiConfig = Config.ai;
       const llmConfig = aiConfig.getLLMConfig();
 
+      console.log("🔧 HackRX Service - LLM Configuration:");
+      console.log(`   API Key: ${llmConfig.primary.apiKey ? `[SET - ${llmConfig.primary.apiKey.substring(0, 8)}...]` : "[NOT SET]"}`);
+      console.log(`   Base URL: ${llmConfig.primary.baseURL}`);
+      console.log(`   Model: ${llmConfig.primary.model}`);
+
       // Create OpenAI client directly to avoid circular dependency
       const client = new OpenAI({
         apiKey: llmConfig.primary.apiKey,
@@ -404,6 +409,21 @@ Each answer should be on its own line and directly address the specific question
           data: result,
         };
       } catch (llmError: any) {
+        console.error("❌ HackRX LLM Error Details:");
+        console.error(`   Error Type: ${llmError instanceof Error ? llmError.constructor.name : typeof llmError}`);
+        console.error(`   Error Message: ${llmError instanceof Error ? llmError.message : String(llmError)}`);
+        
+        // Log additional OpenAI-specific error details
+        if (llmError && typeof llmError === 'object' && 'status' in llmError) {
+          console.error(`   HTTP Status: ${llmError.status}`);
+        }
+        if (llmError && typeof llmError === 'object' && 'code' in llmError) {
+          console.error(`   Error Code: ${llmError.code}`);
+        }
+        if (llmError && typeof llmError === 'object' && 'response' in llmError) {
+          console.error(`   API Response: ${JSON.stringify(llmError.response, null, 2)}`);
+        }
+
         loggingService.error(
           "LLM processing error in HackRX",
           "HackRXService",

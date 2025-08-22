@@ -108,9 +108,12 @@ export class AIConfigService {
         console.log(`🔧 LLM Configuration:`);
         console.log(`   Primary - Base URL: ${llmBaseURL}`);
         console.log(`   Primary - Model: ${model}`);
+        console.log(`   Primary - Service: ${LLM_SERVICE || "not set"}`);
         console.log(
-            `   Primary - API Key: ${LLM_API_KEY ? "[SET]" : "[NOT SET]"}`
+            `   Primary - API Key: ${LLM_API_KEY ? `[SET - starts with: ${LLM_API_KEY.substring(0, 8)}...]` : "[NOT SET]"}`
         );
+        console.log(`   Primary - Deployment: ${LLM_DEPLOYMENT_NAME || "not set"}`);
+        console.log(`   Primary - API Version: ${LLM_API_VERSION || "not set"}`);
 
         if (hasSecondaryLLM) {
             console.log(`   Secondary - Base URL: ${LLM_BASE_URL_2}`);
