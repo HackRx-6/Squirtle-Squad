@@ -1,7 +1,7 @@
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import { sentryMonitoringService } from "../services/monitoring";
-import { validateAuthToken } from "../middlewares/auth.middleware";
+
 import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
 import { webQAService } from "../services/webScraping";
@@ -50,19 +50,6 @@ export const toolsController = {
             "📝 Tools HackRX Request Body:",
             JSON.stringify(body, null, 2)
           );
-
-          // Validate auth token
-          if (!validateAuthToken(request)) {
-            return new Response(
-              JSON.stringify({
-                answers: ["Forbidden: Invalid or missing authentication token"],
-              }),
-              {
-                status: 403,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
-          }
 
           // Basic input validation
           if (!body || typeof body !== "object") {
@@ -248,19 +235,6 @@ export const toolsController = {
             "📝 Tools Web Q&A Request Body:",
             JSON.stringify(body, null, 2)
           );
-
-          // Validate auth token
-          if (!validateAuthToken(request)) {
-            return new Response(
-              JSON.stringify({
-                answers: ["Forbidden: Invalid or missing authentication token"],
-              }),
-              {
-                status: 403,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
-          }
 
           // Basic input validation
           if (!body || typeof body !== "object") {
