@@ -248,6 +248,59 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                   description:
                     "Include page content in response (default: true)",
                 },
+                useEnhancedExtraction: {
+                  type: "boolean",
+                  description:
+                    "Use enhanced HTML extraction with structure preservation and smart JavaScript filtering (default: false)",
+                },
+                enhancedExtractionOptions: {
+                  type: "object",
+                  description: "Options for enhanced content extraction",
+                  properties: {
+                    includeHTML: {
+                      type: "boolean",
+                      description: "Include cleaned HTML structure (default: true)",
+                    },
+                    includeInteractiveElements: {
+                      type: "boolean",
+                      description: "Include detailed form, button, and link information (default: true)",
+                    },
+                    maxContentSize: {
+                      type: "number",
+                      description: "Maximum size of content in characters (default: 50000)",
+                    },
+                    htmlCleaningOptions: {
+                      type: "object",
+                      description: "Fine-grained control over HTML cleaning",
+                      properties: {
+                        includeImportantJS: {
+                          type: "boolean",
+                          description: "Include JavaScript with important operations like API calls (default: true)",
+                        },
+                        preserveCSS: {
+                          type: "boolean",
+                          description: "Preserve CSS styling information (default: false)",
+                        },
+                        includeDataAttributes: {
+                          type: "boolean",
+                          description: "Include data-* attributes (default: true)",
+                        },
+                        includeAriaAttributes: {
+                          type: "boolean",
+                          description: "Include ARIA accessibility attributes (default: true)",
+                        },
+                        maxScriptSize: {
+                          type: "number",
+                          description: "Maximum size of individual JavaScript blocks to include (default: 1500)",
+                        },
+                        includeEventHandlers: {
+                          type: "boolean",
+                          description: "Include inline event handlers like onclick (default: false)",
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -263,6 +316,11 @@ export const executeToolCall = async (
   toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
   options?: { abortSignal?: AbortSignal }
 ): Promise<string> => {
+  // Type guard to ensure we have a function tool call
+  if (toolCall.type !== "function" || !toolCall.function) {
+    throw new Error(`Unsupported tool call type: ${toolCall.type}`);
+  }
+  
   const { name, arguments: rawArgs } = toolCall.function;
   try {
     const args = rawArgs ? JSON.parse(rawArgs) : {};
@@ -648,15 +706,24 @@ export const runWithToolsIfRequested = async (
     // Execute tool calls - OpenAI supports parallel execution
     const toolResults = await Promise.allSettled(
       toolCalls.map(async (toolCall) => {
-        const toolName = toolCall.function?.name;
+        // Type guard to ensure we have a function tool call
+        if (toolCall.type !== "function" || !toolCall.function) {
+          return {
+            toolCallId: toolCall.id,
+            content: `Unsupported tool call type: ${toolCall.type}`,
+            success: false,
+          };
+        }
+
+        const toolName = toolCall.function.name;
         let parsedArgs: any;
 
         try {
-          parsedArgs = toolCall.function?.arguments
+          parsedArgs = toolCall.function.arguments
             ? JSON.parse(toolCall.function.arguments)
             : {};
         } catch {
-          parsedArgs = toolCall.function?.arguments || {};
+          parsedArgs = toolCall.function.arguments || {};
         }
 
         console.log(

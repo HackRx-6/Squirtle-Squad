@@ -8,6 +8,7 @@ import type {
 } from "./types";
 import { sentryMonitoringService } from "../monitoring";
 import { loggingService } from "../logging";
+import { htmlCleaningService, type HTMLCleaningOptions } from "../cleaning";
 
 export class PlaywrightService {
   private browser: Browser | null = null;
@@ -740,45 +741,73 @@ export class PlaywrightService {
           if (request.options?.includeContent !== false) {
             this.logger.info("Extracting page content", { sessionId });
 
-            // Get basic page content
-            const title = await page.title();
-            const textContent = await page.textContent("body");
-            const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+            // Check if enhanced extraction is requested
+            if (request.options?.useEnhancedExtraction) {
+              this.logger.info("Using enhanced content extraction", { sessionId });
 
-            // Get interactive elements
-            const buttons = await page.$$eval(
-              'button, input[type="button"], input[type="submit"]',
-              (elements) =>
+              const enhancedContent = await this.extractEnhancedPageContent(page, {
+                includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
+                htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
+                includeInteractiveElements: request.options.enhancedExtractionOptions?.includeInteractiveElements ?? true,
+                maxContentSize: request.options.enhancedExtractionOptions?.maxContentSize ?? 50000,
+              });
+
+              result.pageContent = JSON.stringify(enhancedContent, null, 2);
+
+              this.logger.info("Enhanced page content extracted", {
+                sessionId,
+                titleLength: enhancedContent.title.length,
+                textLength: enhancedContent.text.length,
+                htmlIncluded: !!enhancedContent.html,
+                htmlSize: enhancedContent.html?.length || 0,
+                formsCount: enhancedContent.interactiveElements?.forms.length || 0,
+                buttonsCount: enhancedContent.interactiveElements?.buttons.length || 0,
+                linksCount: enhancedContent.interactiveElements?.links.length || 0,
+                compressionRatio: enhancedContent.metadata.compressionRatio 
+                  ? Math.round(enhancedContent.metadata.compressionRatio * 100) 
+                  : 0,
+              });
+            } else {
+              // Use original basic content extraction
+              const title = await page.title();
+              const textContent = await page.textContent("body");
+              const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+
+              // Get interactive elements
+              const buttons = await page.$$eval(
+                'button, input[type="button"], input[type="submit"]',
+                (elements) =>
+                  elements
+                    .map((el) => el.textContent?.trim() || (el as any).value)
+                    .filter(Boolean)
+              );
+
+              const links = await page.$$eval("a[href]", (elements) =>
                 elements
-                  .map((el) => el.textContent?.trim() || (el as any).value)
-                  .filter(Boolean)
-            );
+                  .map((el) => ({
+                    text: el.textContent?.trim(),
+                    href: (el as any).href,
+                  }))
+                  .filter((l) => l.text && l.text.length > 0)
+              );
 
-            const links = await page.$$eval("a[href]", (elements) =>
-              elements
-                .map((el) => ({
-                  text: el.textContent?.trim(),
-                  href: (el as any).href,
-                }))
-                .filter((l) => l.text && l.text.length > 0)
-            );
+              const content = {
+                title,
+                text: cleanText, // Remove character limit
+                buttons: buttons.slice(0, 20), // Increase button limit
+                links: links.slice(0, 50), // Increase link limit
+              };
 
-            const content = {
-              title,
-              text: cleanText, // Remove character limit
-              buttons: buttons.slice(0, 20), // Increase button limit
-              links: links.slice(0, 50), // Increase link limit
-            };
+              result.pageContent = JSON.stringify(content, null, 2);
 
-            result.pageContent = JSON.stringify(content, null, 2);
-
-            this.logger.info("Page content extracted", {
-              sessionId,
-              titleLength: title.length,
-              textLength: cleanText.length,
-              buttonCount: buttons.length,
-              linkCount: links.length,
-            });
+              this.logger.info("Basic page content extracted", {
+                sessionId,
+                titleLength: title.length,
+                textLength: cleanText.length,
+                buttonCount: buttons.length,
+                linkCount: links.length,
+              });
+            }
           }
 
           const totalTime = Date.now() - startTime;
@@ -986,45 +1015,75 @@ export class PlaywrightService {
               sessionId: actualSessionId,
             });
 
-            // Get basic page content
-            const title = await page.title();
-            const textContent = await page.textContent("body");
-            const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+            // Check if enhanced extraction is requested
+            if (request.options?.useEnhancedExtraction) {
+              this.logger.info("Using enhanced content extraction", { 
+                sessionId: actualSessionId 
+              });
 
-            // Get interactive elements
-            const buttons = await page.$$eval(
-              'button, input[type="button"], input[type="submit"]',
-              (elements) =>
+              const enhancedContent = await this.extractEnhancedPageContent(page, {
+                includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
+                htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
+                includeInteractiveElements: request.options.enhancedExtractionOptions?.includeInteractiveElements ?? true,
+                maxContentSize: request.options.enhancedExtractionOptions?.maxContentSize ?? 50000,
+              });
+
+              result.pageContent = JSON.stringify(enhancedContent, null, 2);
+
+              this.logger.info("Enhanced page content extracted", {
+                sessionId: actualSessionId,
+                titleLength: enhancedContent.title.length,
+                textLength: enhancedContent.text.length,
+                htmlIncluded: !!enhancedContent.html,
+                htmlSize: enhancedContent.html?.length || 0,
+                formsCount: enhancedContent.interactiveElements?.forms.length || 0,
+                buttonsCount: enhancedContent.interactiveElements?.buttons.length || 0,
+                linksCount: enhancedContent.interactiveElements?.links.length || 0,
+                compressionRatio: enhancedContent.metadata.compressionRatio 
+                  ? Math.round(enhancedContent.metadata.compressionRatio * 100) 
+                  : 0,
+              });
+            } else {
+              // Use original basic content extraction
+              const title = await page.title();
+              const textContent = await page.textContent("body");
+              const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+
+              // Get interactive elements
+              const buttons = await page.$$eval(
+                'button, input[type="button"], input[type="submit"]',
+                (elements) =>
+                  elements
+                    .map((el) => el.textContent?.trim() || (el as any).value)
+                    .filter(Boolean)
+              );
+
+              const links = await page.$$eval("a[href]", (elements) =>
                 elements
-                  .map((el) => el.textContent?.trim() || (el as any).value)
-                  .filter(Boolean)
-            );
+                  .map((el) => ({
+                    text: el.textContent?.trim(),
+                    href: (el as any).href,
+                  }))
+                  .filter((l) => l.text && l.text.length > 0)
+              );
 
-            const links = await page.$$eval("a[href]", (elements) =>
-              elements
-                .map((el) => ({
-                  text: el.textContent?.trim(),
-                  href: (el as any).href,
-                }))
-                .filter((l) => l.text && l.text.length > 0)
-            );
+              const content = {
+                title,
+                text: cleanText, // No character limit
+                buttons: buttons.slice(0, 20), // Increase button limit
+                links: links.slice(0, 50), // Increase link limit
+              };
 
-            const content = {
-              title,
-              text: cleanText, // No character limit
-              buttons: buttons.slice(0, 20), // Increase button limit
-              links: links.slice(0, 50), // Increase link limit
-            };
+              result.pageContent = JSON.stringify(content, null, 2);
 
-            result.pageContent = JSON.stringify(content, null, 2);
-
-            this.logger.info("Page content extracted", {
-              sessionId: actualSessionId,
-              titleLength: title.length,
-              textLength: cleanText.length,
-              buttonCount: buttons.length,
-              linkCount: links.length,
-            });
+              this.logger.info("Basic page content extracted", {
+                sessionId: actualSessionId,
+                titleLength: title.length,
+                textLength: cleanText.length,
+                buttonCount: buttons.length,
+                linkCount: links.length,
+              });
+            }
           }
 
           const totalTime = Date.now() - startTime;
@@ -1067,6 +1126,216 @@ export class PlaywrightService {
         // Note: No finally block - page stays open for persistent sessions
       }
     );
+  }
+
+  /**
+   * Enhanced content extraction with HTML cleaning and structure preservation
+   * This method extracts more detailed HTML structure while filtering out unnecessary content
+   */
+  async extractEnhancedPageContent(
+    page: Page,
+    options: {
+      includeHTML?: boolean;
+      htmlCleaningOptions?: HTMLCleaningOptions;
+      includeInteractiveElements?: boolean;
+      maxContentSize?: number;
+    } = {}
+  ): Promise<{
+    title: string;
+    text: string;
+    html?: string;
+    interactiveElements?: {
+      forms: Array<{
+        id?: string;
+        action?: string;
+        method?: string;
+        inputs: Array<{
+          type: string;
+          name?: string;
+          id?: string;
+          placeholder?: string;
+          required?: boolean;
+        }>;
+      }>;
+      buttons: Array<{
+        text: string;
+        id?: string;
+        type?: string;
+        formAction?: string;
+      }>;
+      links: Array<{
+        text: string;
+        href: string;
+        id?: string;
+      }>;
+    };
+    metadata: {
+      originalHTMLSize?: number;
+      cleanedHTMLSize?: number;
+      compressionRatio?: number;
+      importantScriptsFound?: number;
+    };
+  }> {
+    const {
+      includeHTML = true,
+      htmlCleaningOptions = {},
+      includeInteractiveElements = true,
+      maxContentSize = 50000, // 50KB limit
+    } = options;
+
+    this.logger.info("Starting enhanced content extraction", {
+      includeHTML,
+      includeInteractiveElements,
+      maxContentSize,
+    });
+
+    const startTime = Date.now();
+
+    // Get basic page info
+    const title = await page.title();
+    const textContent = await page.textContent("body");
+    const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+
+    const result: any = {
+      title,
+      text: cleanText,
+      metadata: {},
+    };
+
+    // Extract and clean HTML if requested
+    if (includeHTML) {
+      try {
+        this.logger.debug("Extracting full HTML content");
+        const fullHTML = await page.content();
+        
+        if (fullHTML) {
+          const cleaningResult = htmlCleaningService.cleanHTML(fullHTML, {
+            includeImportantJS: true,
+            preserveCSS: false,
+            includeDataAttributes: true,
+            includeAriaAttributes: true,
+            maxScriptSize: 1500,
+            includeEventHandlers: false,
+            ...htmlCleaningOptions,
+          });
+
+          // Check if cleaned HTML is within size limit
+          if (cleaningResult.html.length <= maxContentSize) {
+            result.html = cleaningResult.html;
+          } else {
+            // If still too large, try more aggressive cleaning
+            const aggressiveResult = htmlCleaningService.cleanHTML(fullHTML, {
+              includeImportantJS: false,
+              preserveCSS: false,
+              includeDataAttributes: false,
+              includeAriaAttributes: false,
+              includeEventHandlers: false,
+              ...htmlCleaningOptions,
+            });
+
+            result.html = aggressiveResult.html.length <= maxContentSize 
+              ? aggressiveResult.html 
+              : aggressiveResult.html.substring(0, maxContentSize) + "...[TRUNCATED]";
+            
+            this.logger.warn("HTML was too large, used aggressive cleaning", {
+              originalSize: cleaningResult.html.length,
+              aggressiveSize: aggressiveResult.html.length,
+              maxSize: maxContentSize,
+            });
+          }
+
+          result.metadata = {
+            originalHTMLSize: cleaningResult.metadata.originalSize,
+            cleanedHTMLSize: cleaningResult.metadata.cleanedSize,
+            compressionRatio: cleaningResult.metadata.compressionRatio,
+            importantScriptsFound: cleaningResult.metadata.importantScriptsFound,
+          };
+
+          this.logger.info("HTML cleaning completed", {
+            originalSize: cleaningResult.metadata.originalSize,
+            cleanedSize: cleaningResult.metadata.cleanedSize,
+            compressionRatio: Math.round(cleaningResult.metadata.compressionRatio * 100),
+            importantScripts: cleaningResult.metadata.importantScriptsFound,
+          });
+        }
+      } catch (error) {
+        this.logger.error("Error during HTML extraction/cleaning", { error });
+        // Fallback to basic text content
+        result.html = undefined;
+      }
+    }
+
+    // Extract interactive elements if requested
+    if (includeInteractiveElements) {
+      try {
+        this.logger.debug("Extracting interactive elements");
+
+        // Extract forms with detailed information
+        const forms = await page.$$eval("form", (forms) =>
+          forms.map((form) => ({
+            id: form.id || undefined,
+            action: form.action || undefined,
+            method: form.method || undefined,
+            inputs: Array.from(form.querySelectorAll("input, select, textarea")).map((input: any) => ({
+              type: input.type || input.tagName.toLowerCase(),
+              name: input.name || undefined,
+              id: input.id || undefined,
+              placeholder: input.placeholder || undefined,
+              required: input.required || false,
+            })),
+          }))
+        );
+
+        // Extract buttons with more details
+        const buttons = await page.$$eval(
+          'button, input[type="button"], input[type="submit"]',
+          (buttons) =>
+            buttons.map((btn: any) => ({
+              text: btn.textContent?.trim() || btn.value || "",
+              id: btn.id || undefined,
+              type: btn.type || undefined,
+              formAction: btn.formAction || undefined,
+            }))
+        );
+
+        // Extract links with IDs
+        const links = await page.$$eval("a[href]", (links) =>
+          links
+            .map((link: any) => ({
+              text: link.textContent?.trim() || "",
+              href: link.href,
+              id: link.id || undefined,
+            }))
+            .filter((link) => link.text && link.text.length > 0)
+        );
+
+        result.interactiveElements = {
+          forms: forms.slice(0, 10), // Limit to prevent bloat
+          buttons: buttons.slice(0, 20),
+          links: links.slice(0, 30),
+        };
+
+        this.logger.info("Interactive elements extracted", {
+          formsCount: forms.length,
+          buttonsCount: buttons.length,
+          linksCount: links.length,
+        });
+      } catch (error) {
+        this.logger.error("Error during interactive elements extraction", { error });
+        result.interactiveElements = undefined;
+      }
+    }
+
+    const extractionTime = Date.now() - startTime;
+    this.logger.info("Enhanced content extraction completed", {
+      extractionTimeMs: extractionTime,
+      titleLength: title.length,
+      textLength: cleanText.length,
+      htmlIncluded: !!result.html,
+      htmlSize: result.html?.length || 0,
+    });
+
+    return result;
   }
 
   async cleanup(): Promise<void> {
