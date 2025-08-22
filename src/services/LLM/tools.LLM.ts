@@ -104,7 +104,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
       function: {
         name: "http_get_json_batch",
         description:
-          "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON for each Call this when a city has multiple different landmarks present.",
+          "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON whenever fetch request is needed",
         parameters: {
           type: "object",
           properties: {
