@@ -62,7 +62,6 @@ Add these **Repository Secrets:**
 DO_HOST = YOUR_DROPLET_IP
 DO_USERNAME = root
 DO_SSH_KEY = YOUR_PRIVATE_SSH_KEY
-DO_PORT = 22
 ```
 
 ### **API Keys (from your current .env):**

@@ -26,19 +26,54 @@ Go to: `GitHub Repository → Settings → Secrets and Variables → Actions`
 
 ### Required Secrets:
 
+#### Digital Ocean Connection:
 ```
 DO_HOST = your_droplet_ip_address
 DO_USERNAME = root
 DO_SSH_KEY = your_private_ssh_key_content
-DO_PORT = 22
+```
 
+#### Primary AI Services:
+```
 EMBEDDINGS_MODEL_API_KEY = your_embedding_model_key
 EMBEDDINGS_MODEL_ENDPOINT = your_embedding_model_endpoint
 EMBEDDINGS_MODEL_DEPLOYMENT_NAME = text-embedding-3-large
-LLM_API_KEY = your_anthropic_key
-LANGCHAIN_TRACING_V2 = true
-LANGCHAIN_API_KEY = your_langsmith_key
-LANGCHAIN_PROJECT = fantastic-robo-production
+EMBEDDINGS_MODEL_API_VERSION = 2024-06-01
+
+LLM_API_KEY = your_llm_api_key
+LLM_BASE_URL = your_llm_base_url
+LLM_DEPLOYMENT_NAME = your_llm_deployment_name
+LLM_MODEL = your_llm_model
+LLM_SERVICE = your_llm_service
+LLM_API_VERSION = your_llm_api_version
+```
+
+#### Secondary AI Services (optional backup):
+```
+EMBEDDINGS_MODEL_API_KEY_2 = your_backup_embedding_model_key
+EMBEDDINGS_MODEL_ENDPOINT_2 = your_backup_embedding_model_endpoint
+EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2 = your_backup_embedding_deployment
+EMBEDDINGS_MODEL_API_VERSION_2 = your_backup_embedding_api_version
+
+LLM_API_KEY_2 = your_backup_llm_api_key
+LLM_BASE_URL_2 = your_backup_llm_base_url
+LLM_DEPLOYMENT_NAME_2 = your_backup_llm_deployment_name
+LLM_MODEL_2 = your_backup_llm_model
+LLM_SERVICE_2 = your_backup_llm_service
+LLM_API_VERSION_2 = your_backup_llm_api_version
+```
+
+#### Additional Services:
+```
+HACKRX_AUTH_TOKEN = your_hackrx_auth_token
+MISTRAL_API_KEY = your_mistral_api_key
+
+# Optional monitoring
+SENTRY_DSN = your_sentry_dsn
+SENTRY_ENVIRONMENT = production
+SENTRY_RELEASE = latest
+SENTRY_TRACES_SAMPLE_RATE = 0.1
+SENTRY_ENABLE_TRACING = true
 ```
 
 ## 🌊 Droplet Setup Steps
