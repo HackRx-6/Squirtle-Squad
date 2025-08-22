@@ -93,6 +93,7 @@ IMPORTANT GUIDELINES:
 3. Analyze structured page content including text, buttons, links, and forms
 4. Be concise in your responses - focus on what changed and what was accomplished
 5. Extract key information like tokens, form data, or navigation results
+6. **HANDLE MULTIPLE QUESTIONS**: When given multiple questions, address each one specifically and provide distinct answers
 
 Available actions for web_automation tool:
 - navigate: Go to a specific URL
@@ -118,11 +119,11 @@ When using selectors:
 - Common selectors: #id, .class, button, input[type="text"], a[href*="example"]
 - Try simple selectors first: "button" for any button, "input" for inputs
 
-RESPONSE STRATEGY:
-- If a URL changes after an action, note the change and analyze the new content
-- Focus on what the action accomplished rather than describing every step
-- Extract key information like tokens, form fields, or content changes
-- Be direct and actionable in your responses
+RESPONSE STRATEGY FOR MULTIPLE QUESTIONS:
+- Address each question individually and thoroughly
+- If questions are related, perform actions once but extract different information for each question
+- Extract all relevant information that could answer any of the questions
+- Provide specific, distinct answers for each question asked
 
 Always provide clear, helpful answers based on the actual page content you receive from the automation tool.
 If an action fails, explain what went wrong and suggest alternatives.`;
@@ -193,7 +194,65 @@ ${questionsText}
 Raw automation results:
 ${rawResults}
 
-Please format this into a clear, user-friendly response that directly answers the user's questions. Focus on the key findings and results rather than the technical automation process.`;
+Please provide a separate, clear answer for each question. Format your response as follows:
+
+ANSWER 1: [Direct answer to question 1]
+ANSWER 2: [Direct answer to question 2]
+ANSWER 3: [Direct answer to question 3]
+... and so on for each question.
+
+Each answer should be on its own line and directly address the specific question asked. Focus on the key findings and results rather than the technical automation process.`;
+  }
+
+  private parseMultipleAnswers(formattedResponse: string, questions: string[]): string[] {
+    const answers: string[] = [];
+    
+    // Try to parse answers in the format "ANSWER 1:", "ANSWER 2:", etc.
+    const answerRegex = /ANSWER\s+(\d+):\s*(.+?)(?=ANSWER\s+\d+:|$)/gs;
+    const matches = [...formattedResponse.matchAll(answerRegex)];
+    
+    if (matches.length > 0) {
+      // Sort matches by answer number to ensure correct order
+      matches.sort((a, b) => {
+        const aNum = a[1] ? parseInt(a[1]) : 0;
+        const bNum = b[1] ? parseInt(b[1]) : 0;
+        return aNum - bNum;
+      });
+      
+      for (const match of matches) {
+        const answerText = match[2]?.trim() || "";
+        if (answerText) {
+          answers.push(answerText);
+        }
+      }
+      
+      // If we don't have enough answers, fill with the formatted response
+      while (answers.length < questions.length) {
+        answers.push(formattedResponse.trim());
+      }
+    } else {
+      // Fallback: try to split by line breaks and map to questions
+      const lines = formattedResponse.split('\n').filter(line => line.trim());
+      
+      if (lines.length >= questions.length) {
+        // Use the first N lines as answers
+        for (let i = 0; i < questions.length; i++) {
+          const line = lines[i];
+          if (line) {
+            answers.push(line.trim());
+          } else {
+            answers.push(formattedResponse.trim());
+          }
+        }
+      } else {
+        // Fallback: use the full response for each question
+        for (let i = 0; i < questions.length; i++) {
+          answers.push(formattedResponse.trim());
+        }
+      }
+    }
+    
+    return answers.slice(0, questions.length); // Ensure we don't have more answers than questions
   }
 
   public async processHackRX(
@@ -319,14 +378,8 @@ Please format this into a clear, user-friendly response that directly answers th
 
         loggingService.info("Response formatting completed", "HackRXService");
 
-        // Return individual answers for each question
-        const answers = request.questions.map((question, index) => {
-          if (index === 0) {
-            return formattedAnswer;
-          }
-          // For additional questions, provide contextual responses
-          return `This question was addressed as part of the web automation process above.`;
-        });
+        // Parse the formatted answer to extract individual answers for each question
+        const answers = this.parseMultipleAnswers(formattedAnswer, request.questions);
 
         const result: HackRXResponse = {
           answers,
