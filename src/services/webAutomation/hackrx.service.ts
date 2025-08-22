@@ -140,6 +140,9 @@ Available actions for web_automation tool:
 - submit_form: Submit a form by clicking submit button (optional submitSelector)
 - find_and_fill: Intelligently find and fill input fields (tries multiple selector strategies)
 
+
+**Hit the Fetch API tool and fetch response from the API.**
+
 Form Interaction Examples:
 - To fill a single input: use "type" action with selector and text
 - To fill multiple inputs: use "fill_form" with formData: {"#email": "user@example.com", "#password": "secret"}
