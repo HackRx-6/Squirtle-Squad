@@ -27,14 +27,20 @@ export interface HackRXError {
 
 export class HackRXService {
   private static instance: HackRXService;
+  private logger = loggingService.createComponentLogger("HackRXService");
 
   private constructor() {
+    this.logger.info("HackRXService initialized");
     // No need to instantiate LLMService here, we'll create the client directly
   }
 
   public static getInstance(): HackRXService {
     if (!HackRXService.instance) {
       HackRXService.instance = new HackRXService();
+      loggingService.info(
+        "HackRXService singleton instance created",
+        "HackRXService"
+      );
     }
     return HackRXService.instance;
   }
@@ -43,7 +49,16 @@ export class HackRXService {
     isValid: boolean;
     error?: HackRXError;
   } {
+    this.logger.debug("Validating HackRX request", {
+      url: request.url,
+      questionsCount: request.questions?.length || 0,
+    });
+
     if (!request.url || typeof request.url !== "string") {
+      this.logger.warn("Validation failed: Invalid URL provided", {
+        url: request.url,
+        urlType: typeof request.url,
+      });
       return {
         isValid: false,
         error: {
@@ -58,6 +73,11 @@ export class HackRXService {
       !Array.isArray(request.questions) ||
       request.questions.length === 0
     ) {
+      this.logger.warn("Validation failed: Invalid questions array", {
+        questions: request.questions,
+        isArray: Array.isArray(request.questions),
+        length: request.questions?.length || 0,
+      });
       return {
         isValid: false,
         error: {
@@ -69,6 +89,14 @@ export class HackRXService {
 
     for (let i = 0; i < request.questions.length; i++) {
       if (typeof request.questions[i] !== "string") {
+        this.logger.warn(
+          `Validation failed: Question ${i + 1} is not a string`,
+          {
+            questionIndex: i,
+            questionType: typeof request.questions[i],
+            question: request.questions[i],
+          }
+        );
         return {
           isValid: false,
           error: {
@@ -78,6 +106,11 @@ export class HackRXService {
         };
       }
     }
+
+    this.logger.debug("Request validation successful", {
+      url: request.url,
+      questionsCount: request.questions.length,
+    });
 
     return { isValid: true };
   }
@@ -146,6 +179,12 @@ For each question that involves interacting with the website, use the web_automa
     formattedResponse: string,
     questions: string[]
   ): string[] {
+    this.logger.debug("Parsing multiple answers from LLM response", {
+      responseLength: formattedResponse.length,
+      questionsCount: questions.length,
+      responsePreview: formattedResponse.substring(0, 200) + "...",
+    });
+
     const answers: string[] = [];
 
     // Try to parse answers in the format "ANSWER 1:", "ANSWER 2:", etc.
@@ -153,6 +192,11 @@ For each question that involves interacting with the website, use the web_automa
     const matches = [...formattedResponse.matchAll(answerRegex)];
 
     if (matches.length > 0) {
+      this.logger.info("Found structured answers in response", {
+        matchCount: matches.length,
+        expectedAnswers: questions.length,
+      });
+
       // Sort matches by answer number to ensure correct order
       matches.sort((a, b) => {
         const aNum = a[1] ? parseInt(a[1]) : 0;
@@ -164,18 +208,35 @@ For each question that involves interacting with the website, use the web_automa
         const answerText = match[2]?.trim() || "";
         if (answerText) {
           answers.push(answerText);
+          this.logger.debug(`Parsed answer ${answers.length}`, {
+            answerLength: answerText.length,
+            answerPreview: answerText.substring(0, 100) + "...",
+          });
         }
       }
 
       // If we don't have enough answers, fill with the formatted response
       while (answers.length < questions.length) {
+        this.logger.warn("Filling missing answer with full response", {
+          currentAnswers: answers.length,
+          expectedAnswers: questions.length,
+        });
         answers.push(formattedResponse.trim());
       }
     } else {
+      this.logger.warn("No structured answers found, using fallback parsing", {
+        responseLength: formattedResponse.length,
+      });
+
       // Fallback: try to split by line breaks and map to questions
       const lines = formattedResponse.split("\n").filter((line) => line.trim());
 
       if (lines.length >= questions.length) {
+        this.logger.info("Using line-based answer parsing", {
+          lineCount: lines.length,
+          questionsCount: questions.length,
+        });
+
         // Use the first N lines as answers
         for (let i = 0; i < questions.length; i++) {
           const line = lines[i];
@@ -186,6 +247,14 @@ For each question that involves interacting with the website, use the web_automa
           }
         }
       } else {
+        this.logger.warn(
+          "Using full response for each question as final fallback",
+          {
+            lineCount: lines.length,
+            questionsCount: questions.length,
+          }
+        );
+
         // Fallback: use the full response for each question
         for (let i = 0; i < questions.length; i++) {
           answers.push(formattedResponse.trim());
@@ -193,17 +262,49 @@ For each question that involves interacting with the website, use the web_automa
       }
     }
 
-    return answers.slice(0, questions.length); // Ensure we don't have more answers than questions
+    const finalAnswers = answers.slice(0, questions.length);
+    this.logger.info("Answer parsing completed", {
+      parsedAnswers: finalAnswers.length,
+      expectedAnswers: questions.length,
+      answerLengths: finalAnswers.map((a) => a.length),
+    });
+
+    return finalAnswers; // Ensure we don't have more answers than questions
   }
 
   public async processHackRX(
     request: HackRXRequest,
     timerContext: TimerContext
   ): Promise<{ success: boolean; data?: HackRXResponse; error?: HackRXError }> {
+    const sessionId = `hackrx_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const startTime = Date.now();
+
+    this.logger.info("Starting HackRX processing session", {
+      sessionId,
+      url: request.url,
+      questionsCount: request.questions.length,
+      questions: request.questions.map(
+        (q, i) =>
+          `${i + 1}. ${q.substring(0, 100)}${q.length > 100 ? "..." : ""}`
+      ),
+      timeRemaining: Math.max(
+        0,
+        timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+      ),
+    });
+
     try {
       // Validate request
+      this.logger.debug("Validating request", { sessionId });
       const validation = this.validateRequest(request);
       if (!validation.isValid) {
+        this.logger.error("Request validation failed", {
+          sessionId,
+          error: validation.error,
+          processingTimeMs: Date.now() - startTime,
+        });
         return {
           success: false,
           error: validation.error,
@@ -212,6 +313,14 @@ For each question that involves interacting with the website, use the web_automa
 
       // Check timeout before processing
       if (timerContext.isExpired) {
+        this.logger.error("Request timed out before processing could begin", {
+          sessionId,
+          timeRemaining: Math.max(
+            0,
+            timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+          ),
+          processingTimeMs: Date.now() - startTime,
+        });
         return {
           success: false,
           error: {
@@ -225,18 +334,27 @@ For each question that involves interacting with the website, use the web_automa
         `Starting HackRX processing for ${request.url}`,
         "HackRXService",
         {
+          sessionId,
           questionsCount: request.questions.length,
         }
       );
 
       // Create prompts
+      this.logger.debug("Creating prompts for LLM", { sessionId });
       const systemPrompt = this.createSystemPrompt();
       const userMessage = this.createUserMessage(
         request.url,
         request.questions
       );
 
+      this.logger.info("Prompts created", {
+        sessionId,
+        systemPromptLength: systemPrompt.length,
+        userMessageLength: userMessage.length,
+      });
+
       // Get LLM config and create client directly
+      this.logger.debug("Initializing LLM client", { sessionId });
       const aiConfig = Config.ai;
       const llmConfig = aiConfig.getLLMConfig();
 
@@ -246,8 +364,21 @@ For each question that involves interacting with the website, use the web_automa
         baseURL: llmConfig.primary.baseURL,
       });
 
+      this.logger.info("LLM client initialized", {
+        sessionId,
+        model: llmConfig.primary.model,
+        baseURL: llmConfig.primary.baseURL,
+      });
+
       // Use tool-enabled LLM processing
       try {
+        this.logger.info("Starting LLM processing with tools", {
+          sessionId,
+          model: llmConfig.primary.model,
+          maxToolLoops: 7,
+        });
+
+        const llmStartTime = Date.now();
         const rawResponse = await runWithToolsIfRequested(
           client,
           llmConfig.primary.model,
@@ -260,8 +391,24 @@ For each question that involves interacting with the website, use the web_automa
           }
         );
 
+        const llmProcessingTime = Date.now() - llmStartTime;
+        this.logger.info("LLM processing completed", {
+          sessionId,
+          processingTimeMs: llmProcessingTime,
+          responseLength: rawResponse.length,
+          responsePreview: rawResponse.substring(0, 200) + "...",
+        });
+
         // Check timeout after LLM processing
         if (timerContext.isExpired) {
+          this.logger.error("Request timed out during LLM processing", {
+            sessionId,
+            llmProcessingTimeMs: llmProcessingTime,
+            timeRemaining: Math.max(
+              0,
+              timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+            ),
+          });
           return {
             success: false,
             error: {
@@ -274,6 +421,9 @@ For each question that involves interacting with the website, use the web_automa
         loggingService.info("HackRX processing completed", "HackRXService");
 
         // Parse the response to extract individual answers for each question
+        this.logger.info("Parsing LLM response into individual answers", {
+          sessionId,
+        });
         const answers = this.parseMultipleAnswers(
           rawResponse.trim(),
           request.questions
@@ -288,24 +438,46 @@ For each question that involves interacting with the website, use the web_automa
           },
         };
 
+        const totalProcessingTime = Date.now() - startTime;
         loggingService.info(
           "HackRX processing completed successfully",
           "HackRXService",
           {
+            sessionId,
             questionsCount: request.questions.length,
             answersCount: answers.length,
+            totalProcessingTimeMs: totalProcessingTime,
+            llmProcessingTimeMs: llmProcessingTime,
           }
         );
+
+        this.logger.info("HackRX session completed successfully", {
+          sessionId,
+          questionsCount: request.questions.length,
+          answersCount: answers.length,
+          totalProcessingTimeMs: totalProcessingTime,
+          llmProcessingTimeMs: llmProcessingTime,
+          finalUrl: request.url,
+        });
 
         return {
           success: true,
           data: result,
         };
       } catch (llmError: any) {
+        const processingTime = Date.now() - startTime;
+        this.logger.error("LLM processing error in HackRX", {
+          sessionId,
+          error: llmError.message,
+          stack: llmError.stack,
+          processingTimeMs: processingTime,
+        });
+
         loggingService.error(
           "LLM processing error in HackRX",
           "HackRXService",
           {
+            sessionId,
             error: llmError.message,
           }
         );
@@ -320,10 +492,19 @@ For each question that involves interacting with the website, use the web_automa
         };
       }
     } catch (error: any) {
+      const processingTime = Date.now() - startTime;
+      this.logger.error("Unexpected error in HackRX processing", {
+        sessionId,
+        error: error.message,
+        stack: error.stack,
+        processingTimeMs: processingTime,
+      });
+
       loggingService.error(
         "Unexpected error in HackRX processing",
         "HackRXService",
         {
+          sessionId,
           error: error.message,
         }
       );
@@ -341,7 +522,16 @@ For each question that involves interacting with the website, use the web_automa
 
   // Cleanup method for graceful shutdown
   public async cleanup(): Promise<void> {
-    await playwrightService.cleanup();
+    this.logger.info("Starting HackRXService cleanup");
+
+    try {
+      await playwrightService.cleanup();
+      this.logger.info("PlaywrightService cleanup completed");
+    } catch (error) {
+      this.logger.error("Error during HackRXService cleanup", { error });
+    }
+
+    this.logger.info("HackRXService cleanup completed");
   }
 }
 
