@@ -202,7 +202,7 @@ export class PlaywrightService {
               actionId,
             });
             await page.click(action.selector, {
-              timeout: 5000,
+              timeout: 500,
               ...action.options,
             });
             this.logger.info(`Click completed on: ${action.selector}`, {
@@ -217,7 +217,7 @@ export class PlaywrightService {
             // Alternative: Try to click using locator
             try {
               const locator = page.locator(action.selector);
-              await locator.click({ timeout: 5000 });
+              await locator.click({ timeout: 500 });
               this.logger.info(
                 `Click completed with locator: ${action.selector}`,
                 {
