@@ -1,7 +1,6 @@
-# Multi-stage build optimized for CI/CD with hnswlib-node support
 FROM oven/bun:1.1.38-alpine AS base
 
-# Essential Alpine packages for native modules compilation (hnswlib-node requires Python for node-gyp)
+# Install build dependencies including Playwright requirements
 RUN apk add --no-cache \
     python3 \
     python3-dev \
@@ -10,14 +9,20 @@ RUN apk add --no-cache \
     g++ \
     build-base \
     make \
+    libffi-dev \
+    openssl-dev \
     ca-certificates \
     tzdata \
     nodejs \
     npm \
-    libstdc++ \
-    libgcc
+    # Playwright/Chromium dependencies
+    chromium \
+    nss \
+    freetype \
+    ttf-freefont \
+    font-noto-emoji
 
-# Install node-gyp globally to ensure proper native module building
+# Install node-gyp
 RUN npm install -g node-gyp
 
 WORKDIR /app
@@ -34,7 +39,10 @@ ENV npm_config_cache=/tmp/.npm
 # Install dependencies and handle native modules properly
 RUN bun install --frozen-lockfile --ignore-scripts
 
-# Manually rebuild native modules to ensure compatibility (requires Python for node-gyp)
+# Install Playwright
+RUN npx playwright install chromium || echo "Playwright install attempted"
+
+# Manually rebuild native modules to ensure compatibility
 RUN cd node_modules/hnswlib-node && \
     npm run rebuild && \
     echo "✅ hnswlib-node rebuilt successfully"
@@ -44,12 +52,12 @@ RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded
 
 # Copy source code and build (excluding native modules from bundle)
 COPY . .
-RUN bun build src/index.ts --outdir ./dist --target node --external hnswlib-node
+RUN bun build src/index.ts --outdir ./dist --target node --external hnswlib-node --external playwright --external playwright-core
 
 # Production stage - keep build tools for native modules
 FROM oven/bun:1.1.38-alpine
 
-# Runtime packages including build tools for native modules (Python needed for node-gyp)
+# Runtime packages including build tools for native modules and Playwright
 RUN apk add --no-cache \
     python3 \
     py3-pip \
@@ -62,7 +70,13 @@ RUN apk add --no-cache \
     make \
     build-base \
     nodejs \
-    npm
+    npm \
+    # Playwright runtime dependencies
+    chromium \
+    nss \
+    freetype \
+    ttf-freefont \
+    font-noto-emoji
 
 # Install node-gyp globally in production stage too
 RUN npm install -g node-gyp
@@ -77,7 +91,7 @@ COPY --from=base /app/package.json ./
 # Verify that the native module was copied correctly
 RUN ls -la node_modules/hnswlib-node/build/ || echo "No build directory found"
 
-# Rebuild native modules in production environment to ensure compatibility (requires Python)
+# Rebuild native modules in production environment to ensure compatibility
 RUN cd node_modules/hnswlib-node && npm run rebuild
 
 # Create symlinks for all the paths that hnswlib-node might look for
@@ -104,9 +118,12 @@ COPY src ./src
 # Create logs directory
 RUN mkdir -p logs
 
-# Environment
+# Set Playwright environment variables for Alpine
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 
 EXPOSE 3000
 
