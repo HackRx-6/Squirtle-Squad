@@ -1,4 +1,4 @@
-# Simple setup script for Fantastic Robo with Python PDF Service
+*+1q# Simple setup script for Fantastic Robo with Python PDF Service
 
 Write-Host "🚀 Setting up Fantastic Robo with Python PDF Service" -ForegroundColor Green
 Write-Host "====================================================" -ForegroundColor Green
