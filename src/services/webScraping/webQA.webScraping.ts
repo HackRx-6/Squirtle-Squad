@@ -1,6 +1,10 @@
 import { AppConfigService } from "../../config/app.config";
 import { LLMService } from "../LLM/core.LLM";
 import { coreWebScrapingService } from "./coreWebScraping.webScraping";
+import {
+  enhancedWebScrapingService,
+  type EnhancedWebScrapingOptions,
+} from "./enhanced.webScraping";
 import { PromptInjectionProtectionService } from "../cleaning";
 import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
@@ -390,6 +394,231 @@ Please provide a clear and direct answer based only on the information available
       };
     } catch (error: any) {
       this.logger.error("Unexpected error in web Q&A processing", {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: {
+          error: `Unexpected error: ${error.message}`,
+          errorType: "unknown",
+          details: error,
+        },
+      };
+    }
+  }
+
+  /**
+   * Process questions using LLM with enhanced scraped content
+   */
+  private async processQuestionsEnhanced(
+    questions: string[],
+    scrapedContent: any,
+    timerContext: TimerContext
+  ): Promise<{ success: boolean; answers?: string[]; error?: WebQAError }> {
+    try {
+      this.logger.info(
+        `Processing ${questions.length} questions with LLM (enhanced mode)`
+      );
+
+      const answers: string[] = [];
+
+      for (let i = 0; i < questions.length; i++) {
+        const question = questions[i];
+
+        // Check timer before each question
+        if (timerContext.isExpired) {
+          this.logger.warn(
+            `Request timed out while processing question ${i + 1}`
+          );
+          answers.push("Request timed out while processing this question.");
+          continue;
+        }
+
+        try {
+          this.logger.debug(`Processing question ${i + 1}: ${question}`);
+
+          const prompt = this.createEnhancedPrompt(
+            question || "",
+            scrapedContent
+          );
+          const response = await this.llmService.generateResponse(
+            "You are a helpful assistant that answers questions based on provided website content. Always base your answers on the given content and be clear when information is not available.",
+            prompt
+          );
+
+          const answer = (response || "").trim() || "No answer generated.";
+          answers.push(answer);
+
+          this.logger.debug(`Question ${i + 1} answered successfully`);
+        } catch (error: any) {
+          this.logger.error(`Error processing question ${i + 1}`, {
+            error: error.message,
+            question,
+          });
+          answers.push(
+            `Error processing this question: ${
+              error.message || "Unknown error"
+            }`
+          );
+        }
+      }
+
+      return {
+        success: true,
+        answers,
+      };
+    } catch (error: any) {
+      this.logger.error("Enhanced LLM processing error", {
+        error: error.message,
+      });
+      return {
+        success: false,
+        error: {
+          error: `Enhanced LLM processing failed: ${error.message}`,
+          errorType: "llm",
+          details: error,
+        },
+      };
+    }
+  }
+
+  /**
+   * Create an enhanced prompt that includes cleaning stats
+   */
+  private createEnhancedPrompt(question: string, scrapedContent: any): string {
+    const tokenSavings = scrapedContent.tokenReduction
+      ? `\n[Note: Content was optimized to save ~${scrapedContent.tokenReduction.tokensSaved} tokens (${scrapedContent.tokenReduction.reductionPercent} reduction)]`
+      : "";
+
+    return `Based on the following optimized website content, please answer the question concisely and accurately.
+
+Website URL: ${scrapedContent.url}
+Website Title: ${scrapedContent.title || "No title found"}${tokenSavings}
+
+Content:
+${scrapedContent.text}
+
+Question: ${question}
+
+Please provide a clear and direct answer based only on the information available in the website content. If the answer cannot be found in the content, please state that clearly.`;
+  }
+
+  /**
+   * Enhanced web Q&A processing with advanced HTML cleaning options
+   */
+  public async processEnhancedWebQA(
+    request: WebQARequest & { cleaningOptions?: EnhancedWebScrapingOptions },
+    timerContext: TimerContext
+  ): Promise<{
+    success: boolean;
+    data?: WebQAResponse & {
+      cleaningStats: any;
+      tokenReduction: any;
+    };
+    error?: WebQAError;
+  }> {
+    try {
+      this.logger.info("Starting enhanced web Q&A processing", {
+        url: request.url,
+        questionCount: request.questions.length,
+        cleaningStrategy:
+          request.cleaningOptions?.cleaningStrategy || "balanced",
+      });
+
+      // Validate request
+      const validation = this.validateRequest(request);
+      if (!validation.isValid) {
+        return { success: false, error: validation.error };
+      }
+
+      // Check timer
+      if (timerContext.isExpired) {
+        return {
+          success: false,
+          error: {
+            error: "Request timed out before processing",
+            errorType: "timeout",
+          },
+        };
+      }
+
+      // Use enhanced web scraping
+      const scrapingResult = await enhancedWebScrapingService.fetchAndCleanHTML(
+        request.url,
+        request.cleaningOptions || { cleaningStrategy: "balanced" },
+        timerContext.abortController.signal
+      );
+
+      this.logger.info("Enhanced scraping completed", {
+        originalLength: scrapingResult.originalHtmlLength,
+        cleanedLength: scrapingResult.cleanedTextLength,
+        tokensSaved: scrapingResult.tokenReduction.tokensSaved,
+        reductionPercent: scrapingResult.tokenReduction.reductionPercent,
+      });
+
+      // Check if we have content
+      if (!scrapingResult.text.trim()) {
+        return {
+          success: false,
+          error: {
+            error: "No content found after advanced cleaning",
+            errorType: "scraping",
+            details: {
+              status: scrapingResult.status,
+              originalLength: scrapingResult.originalHtmlLength,
+            },
+          },
+        };
+      }
+
+      // Check timer before LLM processing
+      if (timerContext.isExpired) {
+        return {
+          success: false,
+          error: {
+            error: "Request timed out during scraping",
+            errorType: "timeout",
+          },
+        };
+      }
+
+      // Process with LLM using existing method pattern
+      const questionProcessingResult = await this.processQuestionsEnhanced(
+        request.questions,
+        scrapingResult,
+        timerContext
+      );
+
+      if (!questionProcessingResult.success) {
+        return {
+          success: false,
+          error: questionProcessingResult.error,
+        };
+      }
+
+      this.logger.info("Enhanced web Q&A processing completed successfully", {
+        url: request.url,
+        answerCount: questionProcessingResult.answers?.length || 0,
+        tokensSaved: scrapingResult.tokenReduction.tokensSaved,
+      });
+
+      return {
+        success: true,
+        data: {
+          answers: questionProcessingResult.answers || [],
+          metadata: {
+            url: scrapingResult.url,
+            title: scrapingResult.title,
+            scrapedAt: scrapingResult.fetchedAt,
+            textLength: scrapingResult.cleanedTextLength,
+            status: scrapingResult.status,
+          },
+          cleaningStats: scrapingResult.cleaningStats,
+          tokenReduction: scrapingResult.tokenReduction,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error("Unexpected error in enhanced web Q&A processing", {
         error: error.message,
       });
       return {
