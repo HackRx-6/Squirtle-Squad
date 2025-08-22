@@ -2,9 +2,9 @@ name: 🚀 Deploy to Digital Ocean
 
 on:
     push:
-        branches: [main, master]
+        branches: ["main", master]
     pull_request:
-        branches: [main, master]
+        branches: ["main", master]
 
 env:
     REGISTRY: ghcr.io
@@ -59,17 +59,11 @@ jobs:
                   password: ${{ secrets.GITHUB_TOKEN }}
 
             # Build Main Application
-            - name: Convert repository name to lowercase
-              id: lowercase
-              run: |
-                echo "image_name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-                echo "python_image_name=$(echo '${{ env.PYTHON_IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
             - name: Extract metadata for main app
               id: meta-main
               uses: docker/metadata-action@v5
               with:
-                  images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image_name }}
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
                   tags: |
                       type=ref,event=branch
                       type=ref,event=pr
@@ -92,7 +86,7 @@ jobs:
               id: meta-python
               uses: docker/metadata-action@v5
               with:
-                  images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.python_image_name }}
+                  images: ${{ env.REGISTRY }}/${{ env.PYTHON_IMAGE_NAME }}
                   tags: |
                       type=ref,event=branch
                       type=ref,event=pr
@@ -129,10 +123,9 @@ jobs:
                   password: ${{ secrets.DO_PASSWORD }}
                   port: 22
                   script: |
-                      # Set variables (convert to lowercase for Docker)
-                      REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-                      MAIN_IMAGE="ghcr.io/${REPO_LOWER}:latest"
-                      PYTHON_IMAGE="ghcr.io/${REPO_LOWER}-python-pdf:latest"
+                      # Set variables
+                      MAIN_IMAGE="ghcr.io/${{ github.repository }}:latest"
+                      PYTHON_IMAGE="ghcr.io/${{ github.repository }}-python-pdf:latest"
                       MAIN_CONTAINER="fantastic-robo"
                       PYTHON_CONTAINER="python-pdf-service"
                       NETWORK_NAME="fantastic-robo-network"

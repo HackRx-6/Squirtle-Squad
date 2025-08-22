@@ -40,21 +40,6 @@ export interface WebAutomationRequest {
     timeout?: number;
     waitForNetworkIdle?: boolean;
     includeContent?: boolean;
-    // Enhanced content extraction options
-    useEnhancedExtraction?: boolean;
-    enhancedExtractionOptions?: {
-      includeHTML?: boolean;
-      includeInteractiveElements?: boolean;
-      maxContentSize?: number;
-      htmlCleaningOptions?: {
-        includeImportantJS?: boolean;
-        preserveCSS?: boolean;
-        includeDataAttributes?: boolean;
-        includeAriaAttributes?: boolean;
-        maxScriptSize?: number;
-        includeEventHandlers?: boolean;
-      };
-    };
   };
 }
 
