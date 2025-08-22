@@ -45,76 +45,6 @@ export class HackRXService {
     return HackRXService.instance;
   }
 
-  /**
-   * Check if text contains problematic characters that cause LLM API errors
-   * @param text - The text to validate
-   * @returns Object with validation result and details about found characters
-   */
-  private checkForProblematicCharacters(text: string): {
-    hasProblematicChars: boolean;
-    foundChars: string[];
-  } {
-    const problematicCharRegex =
-      /[\n\r\t\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\\""''{}[\]|`]/;
-
-    if (!problematicCharRegex.test(text)) {
-      return { hasProblematicChars: false, foundChars: [] };
-    }
-
-    const foundChars = [];
-    if (text.includes("\n")) foundChars.push("newline (\\n)");
-    if (text.includes("\r")) foundChars.push("carriage return (\\r)");
-    if (text.includes("\t")) foundChars.push("tab (\\t)");
-    if (/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/.test(text))
-      foundChars.push("control characters");
-    if (text.includes("\\")) foundChars.push("backslash (\\)");
-    if (/[""'']/.test(text)) foundChars.push("smart quotes");
-    if (/[{}[\]|`]/.test(text)) foundChars.push("special punctuation");
-    if (text.includes('"')) foundChars.push("double quotes");
-
-    return { hasProblematicChars: true, foundChars };
-  }
-
-  /**
-   * Clean text by removing problematic characters that cause LLM API errors
-   * @param text - The text to clean
-   * @returns Cleaned text with problematic characters removed
-   */
-  private cleanProblematicCharacters(text: string): string {
-    return (
-      text
-        // Remove all types of newlines and line breaks
-        .replace(/\r\n/g, " ") // Windows line endings
-        .replace(/\r/g, " ") // Mac line endings
-        .replace(/\n/g, " ") // Unix line endings (changed to space instead of empty)
-        // Remove literal escape sequences
-        .replace(/\\n/g, " ")
-        .replace(/\\r/g, " ")
-        .replace(/\\t/g, " ")
-        // Remove tabs
-        .replace(/\t/g, " ")
-        // Remove control characters and non-printable characters
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, "")
-        // Remove Unicode line/paragraph separators
-        .replace(/[\u2028\u2029]/g, " ")
-        // Remove zero-width characters
-        .replace(/[\u200B-\u200D\uFEFF]/g, "")
-        // Remove backslashes that might cause parsing issues
-        .replace(/\\/g, "")
-        // Remove problematic quotes that might break JSON
-        .replace(/[""]/g, '"') // Smart quotes to regular quotes
-        .replace(/['']/g, "'") // Smart quotes to regular quotes
-        // Ensure no unescaped quotes in the middle of text
-        .replace(/"/g, "'") // Replace all double quotes with single quotes
-        // Remove excessive punctuation that might confuse parsing
-        .replace(/[{}[\]|`]/g, " ")
-        // Clean up excessive whitespace
-        .replace(/\s{2,}/g, " ")
-        // Remove leading/trailing whitespace
-        .trim()
-    );
-  }
-
   private validateRequest(request: HackRXRequest): {
     isValid: boolean;
     error?: HackRXError;
@@ -138,32 +68,6 @@ export class HackRXService {
       };
     }
 
-    // Check for and clean problematic characters in documents
-    const documentsValidation = this.checkForProblematicCharacters(
-      request.documents
-    );
-    if (documentsValidation.hasProblematicChars) {
-      this.logger.info(
-        "Cleaning documents: Found problematic characters, automatically removing them",
-        {
-          originalLength: request.documents.length,
-          foundChars: documentsValidation.foundChars,
-          documentsPreview: request.documents.substring(0, 200) + "...",
-        }
-      );
-
-      // Clean the documents automatically
-      const originalLength = request.documents.length;
-      request.documents = this.cleanProblematicCharacters(request.documents);
-
-      this.logger.info("Documents cleaned successfully", {
-        originalLength: originalLength,
-        cleanedLength: request.documents.length,
-        charactersRemoved: originalLength - request.documents.length,
-        removedChars: documentsValidation.foundChars,
-      });
-    }
-
     if (
       !request.questions ||
       !Array.isArray(request.questions) ||
@@ -184,15 +88,13 @@ export class HackRXService {
     }
 
     for (let i = 0; i < request.questions.length; i++) {
-      const question = request.questions[i];
-
-      if (typeof question !== "string") {
+      if (typeof request.questions[i] !== "string") {
         this.logger.warn(
           `Validation failed: Question ${i + 1} is not a string`,
           {
             questionIndex: i,
-            questionType: typeof question,
-            question: question,
+            questionType: typeof request.questions[i],
+            question: request.questions[i],
           }
         );
         return {
@@ -202,32 +104,6 @@ export class HackRXService {
             errorType: "validation",
           },
         };
-      }
-
-      // Check for and clean problematic characters in each question
-      const questionValidation = this.checkForProblematicCharacters(question);
-      if (questionValidation.hasProblematicChars) {
-        this.logger.info(
-          `Cleaning question ${
-            i + 1
-          }: Found problematic characters, automatically removing them`,
-          {
-            questionIndex: i,
-            foundChars: questionValidation.foundChars,
-            originalQuestion: question.substring(0, 100) + "...",
-          }
-        );
-
-        // Clean the question automatically
-        const cleanedQuestion = this.cleanProblematicCharacters(question);
-        request.questions[i] = cleanedQuestion;
-
-        this.logger.info(`Question ${i + 1} cleaned successfully`, {
-          questionIndex: i,
-          originalLength: question.length,
-          cleanedLength: cleanedQuestion.length,
-          removedChars: questionValidation.foundChars,
-        });
       }
     }
 
@@ -490,45 +366,16 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
       // Create prompts
       this.logger.debug("Creating prompts for LLM", { sessionId });
-      const rawSystemPrompt = this.createSystemPrompt();
-      const rawUserMessage = this.createUserMessage(
+      const systemPrompt = this.createSystemPrompt();
+      const userMessage = this.createUserMessage(
         request.documents,
         request.questions
       );
-
-      // Apply final cleaning to prompts for maximum LLM compatibility
-      const systemPrompt = this.cleanProblematicCharacters(rawSystemPrompt);
-      const userMessage = this.cleanProblematicCharacters(rawUserMessage);
 
       this.logger.info("Prompts created", {
         sessionId,
         systemPromptLength: systemPrompt.length,
         userMessageLength: userMessage.length,
-      });
-
-      // Debug logging to analyze what's being sent to LLM
-      this.logger.debug("Final cleaned prompt analysis for LLM", {
-        sessionId,
-        // Show raw vs cleaned comparison
-        rawUserMessageLength: rawUserMessage.length,
-        cleanedUserMessageLength: userMessage.length,
-        charactersRemovedFromUserMessage:
-          rawUserMessage.length - userMessage.length,
-        // Preview of final cleaned content
-        finalUserMessagePreview: userMessage.substring(0, 500) + "...",
-        finalDocumentsPreview: request.documents.substring(0, 300) + "...",
-        finalQuestionsPreview: request.questions.map((q) =>
-          q.substring(0, 100)
-        ),
-        // Verify cleanliness of final content
-        hasControlChars: /[\x00-\x1F\x7F-\x9F]/.test(userMessage),
-        hasNewlines: /[\n\r]/.test(userMessage),
-        hasNonPrintableASCII: /[^\x20-\x7E]/.test(userMessage),
-        hasBackslashes: userMessage.includes("\\"),
-        hasDoubleQuotes: userMessage.includes('"'),
-        // Final stats
-        finalTotalCharCount: userMessage.length + systemPrompt.length,
-        isCleanASCII: /^[\x20-\x7E\s]*$/.test(userMessage),
       });
 
       // Get LLM config and create client directly
