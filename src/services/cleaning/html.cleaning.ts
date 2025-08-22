@@ -1,587 +1,563 @@
-import { TextCleaningService } from "./text.cleaning";
 
+import { loggingService } from "../logging";
+
+export interface HTMLCleaningOptions {
+  /** Whether to include JavaScript that contains important operations */
+  includeImportantJS?: boolean;
+  /** Whether to preserve CSS for styling context */
+  preserveCSS?: boolean;
+  /** Whether to include data attributes */
+  includeDataAttributes?: boolean;
+  /** Whether to include ARIA attributes for accessibility */
+  includeAriaAttributes?: boolean;
+  /** Maximum size of individual script blocks to include (in characters) */
+  maxScriptSize?: number;
+  /** Whether to include inline event handlers */
+  includeEventHandlers?: boolean;
+}
+
+export interface CleanedHTMLResult {
+  html: string;
+  extractedScripts: {
+    important: string[];
+    filtered: string[];
+  };
+  metadata: {
+    originalSize: number;
+    cleanedSize: number;
+    compressionRatio: number;
+    scriptsProcessed: number;
+    importantScriptsFound: number;
+  };
+}
+
+/**
+ * Service for cleaning and optimizing HTML content for LLM consumption
+ * Preserves structure and important elements while removing unnecessary bloat
+ */
 export class HTMLCleaningService {
-  // Tags that should be completely removed along with their content
-  private static readonly REMOVE_WITH_CONTENT = [
-    "script",
-    "style",
-    "nav",
-    "footer",
-    "header",
-    "aside",
-    "noscript",
-    "iframe",
-    "object",
-    "embed",
-    "applet",
+  private static instance: HTMLCleaningService;
+  private logger = loggingService.createComponentLogger("HTMLCleaningService");
+
+  // Patterns to identify important JavaScript
+  private static readonly IMPORTANT_JS_PATTERNS = [
+    // API and network calls
+    /fetch\s*\(/gi,
+    /XMLHttpRequest/gi,
+    /\.ajax\s*\(/gi,
+    /axios\./gi,
+    /\$\.get\s*\(/gi,
+    /\$\.post\s*\(/gi,
+    /\$\.ajax\s*\(/gi,
+
+    // WebSocket and real-time communication
+    /WebSocket/gi,
+    /socket\.io/gi,
+    /EventSource/gi,
+
+    // Form handling and data submission
+    /FormData/gi,
+    /\.submit\s*\(/gi,
+    /\.serialize\s*\(/gi,
+
+    // Authentication and tokens
+    /token/gi,
+    /auth/gi,
+    /login/gi,
+    /session/gi,
+    /csrf/gi,
+
+    // Local/Session storage operations
+    /localStorage/gi,
+    /sessionStorage/gi,
+    /cookies/gi,
+
+    // Dynamic content loading
+    /\.load\s*\(/gi,
+    /\.html\s*\(/gi,
+    /innerHTML/gi,
+    /appendChild/gi,
+    /createElement/gi,
+
+    // Event handling that might be important
+    /addEventListener/gi,
+    /onClick/gi,
+    /onSubmit/gi,
+    /onChange/gi,
+
+    // JSON operations
+    /JSON\.parse/gi,
+    /JSON\.stringify/gi,
+
+    // Navigation and routing
+    /window\.location/gi,
+    /history\.push/gi,
+    /router\./gi,
+
+    // Error handling
+    /catch\s*\(/gi,
+    /throw\s+/gi,
+    /Error\(/gi,
+  ];
+
+  // Patterns to identify unimportant JavaScript (will be filtered out)
+  private static readonly UNIMPORTANT_JS_PATTERNS = [
+    // Analytics and tracking
+    /google-analytics/gi,
+    /gtag\(/gi,
+    /ga\(/gi,
+    /_gaq/gi,
+    /analytics/gi,
+    /tracking/gi,
+    /mixpanel/gi,
+    /segment\./gi,
+
+    // Advertising
+    /googletag/gi,
+    /doubleclick/gi,
+    /adsystem/gi,
+    /amazon-adsystem/gi,
+
+    // Social media widgets
+    /facebook\.net/gi,
+    /connect\.facebook/gi,
+    /twitter\.com\/widgets/gi,
+    /platform\.linkedin/gi,
+
+    // Chat widgets and support
+    /zendesk/gi,
+    /intercom/gi,
+    /drift/gi,
+    /crisp/gi,
+
+    // CDN and library loaders (usually not business logic)
+    /cdn\.jsdelivr/gi,
+    /unpkg\.com/gi,
+    /cdnjs\.cloudflare/gi,
+
+    // Performance monitoring
+    /newrelic/gi,
+    /sentry/gi,
+    /bugsnag/gi,
+
+    // A/B testing
+    /optimizely/gi,
+    /vwo\.com/gi,
+
+    // Comment systems
+    /disqus/gi,
+    /livefyre/gi,
+  ];
+
+  // HTML elements to preserve with all attributes
+  private static readonly IMPORTANT_ELEMENTS = [
     "form",
-    "button",
     "input",
+    "button",
     "select",
     "textarea",
     "label",
-    "fieldset",
-    "legend",
-    "map",
-    "area",
-    "base",
-    "basefont",
-    "bgsound",
-    "blink",
-    "comment",
-    "frameset",
-    "frame",
-    "isindex",
-    "link",
-    "meta",
-    "param",
-    "sound",
-    "spacer",
-    "wbr",
-  ];
-
-  // Tags that should be removed but content preserved
-  private static readonly REMOVE_TAGS_ONLY = [
-    "span",
-    "div",
+    "a",
+    "nav",
+    "header",
+    "main",
     "section",
     "article",
-    "main",
-    "figure",
-    "figcaption",
-    "details",
-    "summary",
-    "mark",
-    "small",
-    "del",
-    "ins",
-    "sub",
-    "sup",
-    "code",
-    "kbd",
-    "samp",
-    "var",
-    "time",
-    "data",
-    "output",
-    "progress",
-    "meter",
-    "template",
-    "slot",
-    "canvas",
-    "svg",
-    "math",
-    "ruby",
-    "rt",
-    "rp",
-    "bdi",
-    "bdo",
-    "abbr",
-    "cite",
-    "dfn",
-    "q",
-    "s",
-    "u",
-    "font",
-    "center",
-    "big",
-    "tt",
-    "strike",
-    "dir",
-    "menu",
-    "menuitem",
-  ];
-
-  // Tags that should be converted to meaningful text
-  private static readonly CONVERT_TO_TEXT = [
-    "br",
-    "hr",
-    "p",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "li",
-    "dt",
-    "dd",
-    "blockquote",
-    "pre",
-    "address",
-  ];
-
-  // Tags that should be preserved with their content structure
-  private static readonly PRESERVE_STRUCTURE = [
-    "ul",
-    "ol",
-    "dl",
+    "div",
+    "span",
     "table",
-    "thead",
-    "tbody",
-    "tfoot",
     "tr",
     "td",
     "th",
-    "caption",
-    "colgroup",
-    "col",
+    "tbody",
+    "thead",
+    "ul",
+    "ol",
+    "li",
+    "dl",
+    "dt",
+    "dd",
   ];
 
+  // Attributes to always preserve
+  private static readonly IMPORTANT_ATTRIBUTES = [
+    "id",
+    "class",
+    "name",
+    "type",
+    "value",
+    "href",
+    "src",
+    "action",
+    "method",
+    "for",
+    "placeholder",
+    "title",
+    "role",
+    "tabindex",
+    "disabled",
+    "required",
+    "readonly",
+  ];
+
+  constructor() {
+    this.logger.info("HTMLCleaningService initialized");
+  }
+
+  public static getInstance(): HTMLCleaningService {
+    if (!HTMLCleaningService.instance) {
+      HTMLCleaningService.instance = new HTMLCleaningService();
+    }
+    return HTMLCleaningService.instance;
+  }
+
   /**
-   * Extract content from main content containers first
-   * @param html - Raw HTML content
-   * @param contentSelectors - Array of selectors to look for main content
-   * @returns HTML content from main container or original HTML if none found
+   * Clean HTML content for LLM consumption
    */
-  public static extractMainContent(
+  public cleanHTML(
+    htmlContent: string,
+    options: HTMLCleaningOptions = {}
+  ): CleanedHTMLResult {
+    const {
+      includeImportantJS = true,
+      preserveCSS = false,
+      includeDataAttributes = true,
+      includeAriaAttributes = true,
+      maxScriptSize = 2000,
+      includeEventHandlers = true,
+    } = options;
+
+    const originalSize = htmlContent.length;
+
+    this.logger.info("Starting HTML cleaning process", {
+      originalSize: originalSize,
+      options,
+    });
+
+    console.log("\n🧹 [HTMLCleaning] STARTING CLEANING PROCESS:");
+    console.log("=".repeat(60));
+    console.log("📏 Original Size:", originalSize, "characters");
+    console.log("⚙️ Options:", JSON.stringify(options, null, 2));
+    console.log("=".repeat(60));
+
+    let cleanedHTML = htmlContent;
+
+    // Extract and analyze scripts
+    const scriptAnalysis = this.extractAndAnalyzeScripts(
+      cleanedHTML,
+      includeImportantJS,
+      maxScriptSize
+    );
+
+    console.log("\n🧹 [HTMLCleaning] SCRIPT ANALYSIS:");
+    console.log("-".repeat(40));
+    console.log("📜 Important Scripts Found:", scriptAnalysis.important.length);
+    console.log("🗑️ Filtered Scripts:", scriptAnalysis.filtered.length);
+    if (scriptAnalysis.important.length > 0 && scriptAnalysis.important[0]) {
+      console.log(
+        "✅ Important Script Preview:",
+        scriptAnalysis.important[0].substring(0, 100) + "..."
+      );
+    }
+    console.log("-".repeat(40));
+
+    // Remove all script tags first
+    cleanedHTML = this.removeScriptTags(cleanedHTML);
+
+    // Remove CSS if not preserving
+    if (!preserveCSS) {
+      cleanedHTML = this.removeCSS(cleanedHTML);
+    }
+
+    // Clean HTML structure
+    cleanedHTML = this.cleanHTMLStructure(
+      cleanedHTML,
+      includeDataAttributes,
+      includeAriaAttributes,
+      includeEventHandlers
+    );
+
+    // Re-inject important scripts if any
+    if (includeImportantJS && scriptAnalysis.important.length > 0) {
+      cleanedHTML = this.injectImportantScripts(
+        cleanedHTML,
+        scriptAnalysis.important
+      );
+    }
+
+    // Final cleanup
+    cleanedHTML = this.finalCleanup(cleanedHTML);
+
+    const cleanedSize = cleanedHTML.length;
+    const compressionRatio =
+      originalSize > 0 ? (originalSize - cleanedSize) / originalSize : 0;
+
+    const result: CleanedHTMLResult = {
+      html: cleanedHTML,
+      extractedScripts: scriptAnalysis,
+      metadata: {
+        originalSize,
+        cleanedSize,
+        compressionRatio,
+        scriptsProcessed:
+          scriptAnalysis.important.length + scriptAnalysis.filtered.length,
+        importantScriptsFound: scriptAnalysis.important.length,
+      },
+    };
+
+    this.logger.info("HTML cleaning completed", {
+      originalSize,
+      cleanedSize,
+      compressionRatio: Math.round(compressionRatio * 100),
+      importantScripts: scriptAnalysis.important.length,
+      filteredScripts: scriptAnalysis.filtered.length,
+    });
+
+    console.log("\n🧹 [HTMLCleaning] CLEANING COMPLETED:");
+    console.log("=".repeat(60));
+    console.log("📏 Original Size:", originalSize, "characters");
+    console.log("📏 Cleaned Size:", cleanedSize, "characters");
+    console.log(
+      "📊 Compression Ratio:",
+      Math.round(compressionRatio * 100) + "%"
+    );
+    console.log(
+      "📜 Important Scripts Included:",
+      scriptAnalysis.important.length
+    );
+    console.log("🗑️ Scripts Filtered Out:", scriptAnalysis.filtered.length);
+    console.log("💾 Size Reduction:", originalSize - cleanedSize, "characters");
+    console.log("=".repeat(60));
+
+    return result;
+  }
+
+  /**
+   * Extract and analyze JavaScript for importance
+   */
+  private extractAndAnalyzeScripts(
     html: string,
-    contentSelectors: string[] = [
-      "root",
-      "main",
-      "content",
-      "article",
-      "post",
-      "entry",
-      "page",
-      "wrapper",
-      "container",
-      "body-content",
-      "main-content",
-      "primary-content",
-      "page-content",
-    ]
+    includeImportantJS: boolean,
+    maxScriptSize: number
+  ): { important: string[]; filtered: string[] } {
+    const important: string[] = [];
+    const filtered: string[] = [];
+
+    if (!includeImportantJS) {
+      return { important, filtered };
+    }
+
+    // Extract all script tags
+    const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+    let match;
+
+    while ((match = scriptRegex.exec(html)) !== null) {
+      const scriptContent = match[1]?.trim() || "";
+
+      // Skip empty scripts
+      if (!scriptContent || scriptContent.length === 0) {
+        continue;
+      }
+
+      // Skip if too large
+      if (scriptContent.length > maxScriptSize) {
+        filtered.push(
+          `[FILTERED: Script too large (${scriptContent.length} chars)]`
+        );
+        continue;
+      }
+
+      // Check if script is unimportant first (these take priority)
+      const isUnimportant = HTMLCleaningService.UNIMPORTANT_JS_PATTERNS.some(
+        (pattern) => pattern.test(scriptContent)
+      );
+
+      if (isUnimportant) {
+        filtered.push(`[FILTERED: Analytics/Tracking script]`);
+        continue;
+      }
+
+      // Check if script contains important patterns
+      const isImportant = HTMLCleaningService.IMPORTANT_JS_PATTERNS.some(
+        (pattern) => pattern.test(scriptContent)
+      );
+
+      if (isImportant) {
+        // Clean the script content before including
+        const cleanedScript = this.cleanScriptContent(scriptContent);
+        important.push(cleanedScript);
+      } else {
+        filtered.push(`[FILTERED: No important patterns found]`);
+      }
+    }
+
+    return { important, filtered };
+  }
+
+  /**
+   * Clean individual script content
+   */
+  private cleanScriptContent(script: string): string {
+    return (
+      script
+        // Remove comments
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "")
+        // Remove console.log statements
+        .replace(/console\.(log|debug|info|warn)\s*\([^)]*\);?/g, "")
+        // Normalize whitespace
+        .replace(/\s+/g, " ")
+        .trim()
+    );
+  }
+
+  /**
+   * Remove all script tags from HTML
+   */
+  private removeScriptTags(html: string): string {
+    return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
+  }
+
+  /**
+   * Remove CSS from HTML
+   */
+  private removeCSS(html: string): string {
+    return (
+      html
+        // Remove style tags
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        // Remove style attributes (but preserve others)
+        .replace(/\s+style\s*=\s*["'][^"']*["']/gi, "")
+    );
+  }
+
+  /**
+   * Clean HTML structure while preserving important elements and attributes
+   */
+  private cleanHTMLStructure(
+    html: string,
+    includeDataAttributes: boolean,
+    includeAriaAttributes: boolean,
+    includeEventHandlers: boolean
   ): string {
-    if (!html || html.trim().length === 0) {
+    // Use a simple approach since we don't have a full HTML parser
+    // This preserves the structure while cleaning attributes
+
+    let cleaned = html;
+
+    // Remove comments
+    cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, "");
+
+    // Clean up attributes while preserving important ones
+    if (!includeEventHandlers) {
+      // Remove inline event handlers
+      cleaned = cleaned.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, "");
+    }
+
+    if (!includeDataAttributes) {
+      // Remove data attributes
+      cleaned = cleaned.replace(/\s+data-[\w-]+\s*=\s*["'][^"']*["']/gi, "");
+    }
+
+    if (!includeAriaAttributes) {
+      // Remove aria attributes
+      cleaned = cleaned.replace(/\s+aria-[\w-]+\s*=\s*["'][^"']*["']/gi, "");
+    }
+
+    return cleaned;
+  }
+
+  /**
+   * Inject important scripts back into the cleaned HTML
+   */
+  private injectImportantScripts(
+    html: string,
+    importantScripts: string[]
+  ): string {
+    if (importantScripts.length === 0) {
       return html;
     }
 
-    // Try to find content by ID first
-    for (const selector of contentSelectors) {
-      // Look for elements with specific IDs
-      const idRegex = new RegExp(
-        `<[^>]+id=['"]${selector}['"][^>]*>([\\s\\S]*?)<\\/[^>]+>`,
-        "i"
-      );
-      const idMatch = html.match(idRegex);
-      if (idMatch && idMatch[1]) {
-        console.log(`📍 Found main content by ID: ${selector}`);
-        return idMatch[1];
-      }
+    // Add scripts before closing body tag, or at the end if no body tag
+    const scriptsHTML = importantScripts
+      .map((script) => `<script type="text/javascript">\n${script}\n</script>`)
+      .join("\n");
 
-      // Look for elements with specific classes
-      const classRegex = new RegExp(
-        `<[^>]+class=['"][^'"]*${selector}[^'"]*['"][^>]*>([\\s\\S]*?)<\\/[^>]+>`,
-        "i"
-      );
-      const classMatch = html.match(classRegex);
-      if (classMatch && classMatch[1]) {
-        console.log(`📍 Found main content by class: ${selector}`);
-        return classMatch[1];
-      }
-    }
-
-    // Look for semantic HTML5 elements
-    const semanticElements = ["main", "article", "section"];
-    for (const element of semanticElements) {
-      const regex = new RegExp(
-        `<${element}[^>]*>([\\s\\S]*?)<\\/${element}>`,
-        "i"
-      );
-      const match = html.match(regex);
-      if (match && match[1]) {
-        console.log(`📍 Found main content by semantic element: ${element}`);
-        return match[1];
-      }
-    }
-
-    // Fallback: try to extract body content
-    const bodyRegex = /<body[^>]*>([\s\S]*?)<\/body>/i;
-    const bodyMatch = html.match(bodyRegex);
-    if (bodyMatch && bodyMatch[1]) {
-      console.log(`📍 Using body content as fallback`);
-      return bodyMatch[1];
-    }
-
-    console.log(`📍 No main content container found, using full HTML`);
-    return html;
-  }
-
-  /**
-   * Clean HTML content by removing unnecessary tags and empty nested elements
-   * @param html - Raw HTML content
-   * @param options - Cleaning options
-   * @returns Cleaned text content optimized for LLM processing
-   */
-  public static cleanHTML(
-    html: string,
-    options: {
-      preserveFormatting?: boolean;
-      aggressiveCleanup?: boolean;
-      maxEmptyLevels?: number;
-      extractMainContent?: boolean;
-      contentSelectors?: string[];
-    } = {}
-  ): string {
-    const {
-      preserveFormatting = true,
-      aggressiveCleanup = true,
-      maxEmptyLevels = 3,
-      extractMainContent = true,
-      contentSelectors = [
-        "root",
-        "main",
-        "content",
-        "article",
-        "post",
-        "entry",
-        "page",
-      ],
-    } = options;
-
-    if (!html || html.trim().length === 0) {
-      return "";
-    }
-
-    console.log(`🧹 Starting HTML cleaning (${html.length} characters)...`);
-    const startTime = Date.now();
-
-    let cleanedHtml = html;
-
-    // Step 0: Extract main content if enabled
-    if (extractMainContent) {
-      cleanedHtml = this.extractMainContent(cleanedHtml, contentSelectors);
-      console.log(
-        `📍 After main content extraction: ${cleanedHtml.length} characters`
-      );
-    }
-
-    // Step 1: Remove comments
-    cleanedHtml = this.removeComments(cleanedHtml);
-
-    // Step 2: Remove tags with their content
-    cleanedHtml = this.removeTagsWithContent(cleanedHtml);
-
-    // Step 3: Convert structural tags to meaningful text
-    cleanedHtml = this.convertStructuralTags(cleanedHtml, preserveFormatting);
-
-    // Step 4: Remove empty nested elements
-    if (aggressiveCleanup) {
-      cleanedHtml = this.removeEmptyNestedElements(cleanedHtml, maxEmptyLevels);
-    }
-
-    // Step 5: Remove remaining unwanted tags but preserve content
-    cleanedHtml = this.removeUnwantedTags(cleanedHtml);
-
-    // Step 6: Clean up whitespace and HTML entities
-    cleanedHtml = this.cleanupHtmlEntities(cleanedHtml);
-
-    // Step 7: Apply final text cleaning using existing service
-    const finalText = TextCleaningService.cleanText(cleanedHtml, {
-      enablePromptInjectionProtection: false, // HTML is not user input
-      strictSanitization: false,
-    });
-
-    const endTime = Date.now();
-    const originalLength = html.length;
-    const cleanedLength = finalText.length;
-    const reductionPercent = (
-      ((originalLength - cleanedLength) / originalLength) *
-      100
-    ).toFixed(1);
-
-    console.log(`✅ HTML cleaning completed in ${endTime - startTime}ms`, {
-      originalLength,
-      cleanedLength,
-      reductionPercent: `${reductionPercent}%`,
-      tokensSaved: Math.floor((originalLength - cleanedLength) / 4), // Rough token estimation
-    });
-
-    return finalText;
-  }
-
-  /**
-   * Remove HTML comments
-   */
-  private static removeComments(html: string): string {
-    return html.replace(/<!--[\s\S]*?-->/g, "");
-  }
-
-  /**
-   * Remove tags along with their content
-   */
-  private static removeTagsWithContent(html: string): string {
-    let result = html;
-
-    for (const tag of this.REMOVE_WITH_CONTENT) {
-      // Remove opening and closing tags with all content in between
-      const regex = new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi");
-      result = result.replace(regex, " ");
-
-      // Remove self-closing tags
-      const selfClosingRegex = new RegExp(`<${tag}[^>]*\\/>`, "gi");
-      result = result.replace(selfClosingRegex, "");
-    }
-
-    return result;
-  }
-
-  /**
-   * Convert structural tags to meaningful text
-   */
-  private static convertStructuralTags(
-    html: string,
-    preserveFormatting: boolean
-  ): string {
-    let result = html;
-
-    if (preserveFormatting) {
-      // Convert headers to text with emphasis
-      result = result.replace(/<h([1-6])[^>]*>/gi, "\n\n");
-      result = result.replace(/<\/h[1-6]>/gi, "\n");
-
-      // Convert paragraphs
-      result = result.replace(/<p[^>]*>/gi, "\n\n");
-      result = result.replace(/<\/p>/gi, "");
-
-      // Convert line breaks
-      result = result.replace(/<br[^>]*\/?>/gi, "\n");
-      result = result.replace(/<hr[^>]*\/?>/gi, "\n---\n");
-
-      // Convert list items
-      result = result.replace(/<li[^>]*>/gi, "\n• ");
-      result = result.replace(/<\/li>/gi, "");
-
-      // Convert definition terms and descriptions
-      result = result.replace(/<dt[^>]*>/gi, "\n");
-      result = result.replace(/<\/dt>/gi, ": ");
-      result = result.replace(/<dd[^>]*>/gi, "");
-      result = result.replace(/<\/dd>/gi, "\n");
-
-      // Convert blockquotes
-      result = result.replace(/<blockquote[^>]*>/gi, '\n"');
-      result = result.replace(/<\/blockquote>/gi, '"\n');
-
-      // Convert preformatted text
-      result = result.replace(/<pre[^>]*>/gi, "\n```\n");
-      result = result.replace(/<\/pre>/gi, "\n```\n");
-
-      // Convert address
-      result = result.replace(/<address[^>]*>/gi, "\n");
-      result = result.replace(/<\/address>/gi, "\n");
+    if (html.includes("</body>")) {
+      return html.replace("</body>", `${scriptsHTML}\n</body>`);
     } else {
-      // Simple conversion - just add spaces
-      for (const tag of this.CONVERT_TO_TEXT) {
-        const regex = new RegExp(`<\\/?${tag}[^>]*>`, "gi");
-        result = result.replace(regex, " ");
-      }
+      return html + "\n" + scriptsHTML;
     }
-
-    return result;
   }
 
   /**
-   * Remove empty nested elements that don't contribute to content
+   * Final cleanup of the HTML
    */
-  private static removeEmptyNestedElements(
-    html: string,
-    maxLevels: number
-  ): string {
-    let result = html;
-    let previousLength = 0;
-    let iterations = 0;
-
-    // Keep removing empty elements until no more can be removed or max iterations reached
-    while (result.length !== previousLength && iterations < maxLevels) {
-      previousLength = result.length;
-
-      // Only remove truly empty elements (no text content, only whitespace/nbsp)
-      result = result.replace(
-        /<(div|span|section|article|aside|main|figure|figcaption)[^>]*>[\s&nbsp;]*<\/\1>/gi,
-        " "
-      );
-
-      // Remove nested empty elements that only contain other empty elements
-      result = result.replace(
-        /<(div|span|section|article|aside|main|figure|figcaption)[^>]*>\s*(<(div|span|section|article|aside|main|figure|figcaption)[^>]*>[\s&nbsp;]*<\/\3>\s*)+<\/\1>/gi,
-        " "
-      );
-
-      iterations++;
-    }
-
-    return result;
+  private finalCleanup(html: string): string {
+    return (
+      html
+        // Normalize whitespace
+        .replace(/\s+/g, " ")
+        // Clean up multiple newlines
+        .replace(/\n\s*\n/g, "\n")
+        // Remove leading/trailing whitespace
+        .trim()
+    );
   }
 
   /**
-   * Remove unwanted tags but preserve their content
+   * Quick method to get a cleaned version with sensible defaults
    */
-  private static removeUnwantedTags(html: string): string {
-    let result = html;
-
-    for (const tag of this.REMOVE_TAGS_ONLY) {
-      // Remove opening and closing tags but preserve content
-      const openingRegex = new RegExp(`<${tag}[^>]*>`, "gi");
-      const closingRegex = new RegExp(`<\\/${tag}>`, "gi");
-
-      result = result.replace(openingRegex, " ");
-      result = result.replace(closingRegex, " ");
-    }
-
-    // Remove any remaining HTML tags (catch-all)
-    result = result.replace(/<[^>]+>/g, " ");
-
-    return result;
-  }
-
-  /**
-   * Clean up HTML entities and normalize whitespace
-   */
-  private static cleanupHtmlEntities(html: string): string {
-    let result = html;
-
-    // Common HTML entities
-    const entities: Record<string, string> = {
-      "&nbsp;": " ",
-      "&amp;": "&",
-      "&lt;": "<",
-      "&gt;": ">",
-      "&quot;": '"',
-      "&#39;": "'",
-      "&apos;": "'",
-      "&copy;": "©",
-      "&reg;": "®",
-      "&trade;": "™",
-      "&ndash;": "–",
-      "&mdash;": "—",
-      "&lsquo;": "\u2018", // Left single quotation mark
-      "&rsquo;": "\u2019", // Right single quotation mark
-      "&ldquo;": "\u201C", // Left double quotation mark
-      "&rdquo;": "\u201D", // Right double quotation mark
-      "&hellip;": "…",
-      "&bull;": "•",
-    };
-
-    // Replace HTML entities
-    for (const [entity, replacement] of Object.entries(entities)) {
-      result = result.replace(new RegExp(entity, "g"), replacement);
-    }
-
-    // Handle numeric entities (e.g., &#123;, &#x1F;)
-    result = result.replace(/&#(\d+);/g, (match, dec) => {
-      try {
-        return String.fromCharCode(parseInt(dec, 10));
-      } catch {
-        return " ";
-      }
+  public quickClean(htmlContent: string): string {
+    const result = this.cleanHTML(htmlContent, {
+      includeImportantJS: true,
+      preserveCSS: false,
+      includeDataAttributes: true,
+      includeAriaAttributes: true,
+      maxScriptSize: 1500,
+      includeEventHandlers: false,
     });
 
-    result = result.replace(/&#x([0-9A-Fa-f]+);/g, (match, hex) => {
-      try {
-        return String.fromCharCode(parseInt(hex, 16));
-      } catch {
-        return " ";
-      }
-    });
-
-    return result;
+    return result.html;
   }
 
   /**
-   * Extract clean text from table structures
+   * Get a summary of what would be cleaned without actually cleaning
    */
-  public static extractTableText(html: string): string {
-    let result = html;
+  public analyzeHTML(htmlContent: string): {
+    scriptCount: number;
+    importantScripts: number;
+    estimatedSizeReduction: number;
+    hasInlineCSS: boolean;
+    hasExternalCSS: boolean;
+  } {
+    const scriptMatches =
+      htmlContent.match(/<script[^>]*>[\s\S]*?<\/script>/gi) || [];
+    const styleMatches =
+      htmlContent.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
+    const linkCSSMatches =
+      htmlContent.match(/<link[^>]*rel\s*=\s*["']stylesheet["'][^>]*>/gi) || [];
 
-    // Convert table structure to readable text
-    result = result.replace(/<table[^>]*>/gi, "\n[TABLE]\n");
-    result = result.replace(/<\/table>/gi, "\n[/TABLE]\n");
-    result = result.replace(/<tr[^>]*>/gi, "\n");
-    result = result.replace(/<\/tr>/gi, "");
-    result = result.replace(/<t[hd][^>]*>/gi, " | ");
-    result = result.replace(/<\/t[hd]>/gi, "");
-    result = result.replace(/<thead[^>]*>/gi, "\n");
-    result = result.replace(/<\/thead>/gi, "\n---\n");
-    result = result.replace(/<tbody[^>]*>/gi, "");
-    result = result.replace(/<\/tbody>/gi, "");
-    result = result.replace(/<tfoot[^>]*>/gi, "\n---\n");
-    result = result.replace(/<\/tfoot>/gi, "");
+    const scriptAnalysis = this.extractAndAnalyzeScripts(
+      htmlContent,
+      true,
+      2000
+    );
 
-    return result;
-  }
-
-  /**
-   * Get HTML cleaning statistics
-   */
-  public static getCleaningStats(originalHtml: string, cleanedText: string) {
-    const originalLength = originalHtml.length;
-    const cleanedLength = cleanedText.length;
-    const reductionPercent = (
-      ((originalLength - cleanedLength) / originalLength) *
-      100
-    ).toFixed(1);
-
-    // Estimate token reduction (rough approximation: 1 token ≈ 4 characters)
-    const estimatedOriginalTokens = Math.ceil(originalLength / 4);
-    const estimatedCleanedTokens = Math.ceil(cleanedLength / 4);
-    const tokensReduced = estimatedOriginalTokens - estimatedCleanedTokens;
+    // Estimate size reduction
+    const scriptSize = scriptMatches.join("").length;
+    const styleSize = styleMatches.join("").length;
+    const estimatedReduction = scriptSize + styleSize;
 
     return {
-      originalLength,
-      cleanedLength,
-      charactersRemoved: originalLength - cleanedLength,
-      reductionPercent: `${reductionPercent}%`,
-      estimatedOriginalTokens,
-      estimatedCleanedTokens,
-      tokensReduced,
-      tokenReductionPercent: `${(
-        (tokensReduced / estimatedOriginalTokens) *
-        100
-      ).toFixed(1)}%`,
+      scriptCount: scriptMatches.length,
+      importantScripts: scriptAnalysis.important.length,
+      estimatedSizeReduction: estimatedReduction,
+      hasInlineCSS: styleMatches.length > 0,
+      hasExternalCSS: linkCSSMatches.length > 0,
     };
-  }
-
-  /**
-   * Advanced HTML cleaning with content extraction strategies
-   */
-  public static advancedClean(
-    html: string,
-    strategy: "aggressive" | "balanced" | "conservative" = "balanced"
-  ): string {
-    const strategies = {
-      aggressive: {
-        preserveFormatting: false,
-        aggressiveCleanup: true,
-        maxEmptyLevels: 5,
-        extractMainContent: true,
-        contentSelectors: [
-          "root",
-          "main",
-          "content",
-          "article",
-          "post",
-          "entry",
-          "page",
-          "wrapper",
-          "container",
-        ],
-      },
-      balanced: {
-        preserveFormatting: true,
-        aggressiveCleanup: true,
-        maxEmptyLevels: 3,
-        extractMainContent: true,
-        contentSelectors: ["root", "main", "content", "article", "post"],
-      },
-      conservative: {
-        preserveFormatting: true,
-        aggressiveCleanup: false,
-        maxEmptyLevels: 1,
-        extractMainContent: true,
-        contentSelectors: ["main", "article"],
-      },
-    };
-
-    return this.cleanHTML(html, strategies[strategy]);
   }
 }
+
+// Export singleton instance
+export const htmlCleaningService = HTMLCleaningService.getInstance();

@@ -1,35 +1,37 @@
 {
-    "name": "fantastic-robo",
-    "module": "src/index.ts",
-    "type": "module",
-    "private": true,
-    "devDependencies": {
-        "@types/bun": "latest",
-        "@types/node": "^24.3.0"
-    },
-    "scripts": {
-        "watch": "bun --watch src/index.ts",
-        "dev": "bun run src/index.ts",
-        "build": "bun build src/index.ts --outdir ./dist --target node",
-        "start": "bun run dist/index.js",
-        "verify-pptx": "./scripts/verify-pptx-setup.sh",
-        "docker:up": "docker-compose up -d",
-        "docker:down": "docker-compose down",
-        "docker:logs": "docker-compose logs -f"
-    },
-    "peerDependencies": {
-        "typescript": "^5"
-    },
-    "dependencies": {
-        "@mistralai/mistralai": "^1.7.5",
-        "@sentry/bun": "^9.42.0",
-        "@sentry/profiling-node": "^9.42.0",
-        "elysia": "^1.3.5",
-        "hnswlib-node": "^3.0.0",
-        "langchain": "^0.3.30",
-        "node-email-reply-parser": "^0.1.4",
-        "officeparser": "^5.2.0",
-        "openai": "^5.10.2",
-        "unpdf": "^1.1.0"
-    }
+
+  "name": "fantastic-robo",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "scripts": {
+    "watch": "bun --watch src/index.ts",
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir ./dist --target node",
+    "start": "bun run dist/index.js",
+    "verify-pptx": "./scripts/verify-pptx-setup.sh",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mistralai/mistralai": "^1.7.5",
+    "@sentry/bun": "^9.42.0",
+    "@sentry/profiling-node": "^9.42.0",
+    "elysia": "^1.3.5",
+    "hnswlib-node": "^3.0.0",
+    "langchain": "^0.3.30",
+    "node-email-reply-parser": "^0.1.4",
+    "officeparser": "^5.2.0",
+    "openai": "^5.10.2",
+    "playwright": "^1.49.1",
+    "unpdf": "^1.1.0"
+  }
+
 }

@@ -2,11 +2,13 @@ import { ApiResponse } from "../utils/ApiResponse";
 import { sentryMonitoringService } from "../services/monitoring";
 import { loggingService } from "../services/logging";
 import { UnifiedTextExtractionService } from "../services/extraction";
+import { startupService } from "../services/startup";
 
 export const healthcheckController = {
     handle: async () => {
         const monitoringStats = sentryMonitoringService.getStats();
         const loggingStats = loggingService.getStats();
+        const serviceStatus = startupService.getInitializationStatus();
 
         // Check PDF extraction services health
         const textExtractionService = new UnifiedTextExtractionService();
@@ -19,6 +21,13 @@ export const healthcheckController = {
                 status: "ok",
                 services: {
                     pdfExtraction: extractionHealth,
+                    webAutomation: {
+                        playwright: {
+                            ready: serviceStatus.playwrightReady,
+                            status: serviceStatus.playwrightReady ? "initialized" : "on-demand",
+                        },
+                        initialized: serviceStatus.isInitialized,
+                    },
                 },
                 monitoring: {
                     enabled: monitoringStats.enabled,

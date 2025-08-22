@@ -1,10 +1,11 @@
 import { ApiError } from "../utils/ApiError";
 import { ApiResponse } from "../utils/ApiResponse";
 import { sentryMonitoringService } from "../services/monitoring";
-import { validateAuthToken } from "../middlewares/auth.middleware";
+
 import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
 import { webQAService } from "../services/webScraping";
+import { hackrxService } from "../services/webAutomation";
 
 export const toolsController = {
   async runHackRX(request: Request): Promise<Response> {
@@ -54,19 +55,6 @@ export const toolsController = {
             "📝 Tools HackRX Request Body:",
             JSON.stringify(body, null, 2)
           );
-
-          // Validate auth token
-          if (!validateAuthToken(request)) {
-            return new Response(
-              JSON.stringify({
-                answers: ["Forbidden: Invalid or missing authentication token"],
-              }),
-              {
-                status: 403,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
-          }
 
           // Basic input validation
           if (!body || typeof body !== "object") {
@@ -135,32 +123,41 @@ export const toolsController = {
             );
           }
 
-          // Basic processing logic with hardcoded test values
-          // TODO: Replace with actual processing logic later
-          const hardcodedAnswers = [
-            "100+22=122.",
-            "9+5=14.",
-            "65007+2=65009.",
-            "1+1=2.",
-            "5+500=505.",
-          ];
+          console.log("🚀 Starting HackRX processing with web automation");
 
-          // Generate answers based on questions (for now using hardcoded values)
-          const answers = questions.map((question: string, index: number) => {
-            // Return hardcoded answer if available, otherwise generate a fallback
-            if (index < hardcodedAnswers.length) {
-              return hardcodedAnswers[index];
-            }
-            return `The answer to "${question}" will be processed later.`;
-          });
+          // Use the dedicated HackRX service with LLM and web automation tools
+          const result = await hackrxService.processHackRX(
+            { url, questions },
+            timerContext
+          );
 
-          const result = {
-            answers: answers,
-          };
+          if (!result.success) {
+            const error = result.error!;
+            console.error("❌ HackRX processing failed:", error);
+
+            // Determine HTTP status based on error type
+            let status = 500;
+            if (error.errorType === "validation") status = 400;
+            else if (error.errorType === "timeout") status = 408;
+            else if (error.errorType === "automation") status = 400;
+
+            return new Response(
+              JSON.stringify({
+                answers: [error.error],
+                error_type: error.errorType,
+                elapsed_seconds: (Date.now() - timerContext.startTime) / 1000,
+                details: error.details,
+              }),
+              {
+                status,
+                headers: { "Content-Type": "application/json" },
+              }
+            );
+          }
 
           console.log("✅ Tools HackRX Processing completed successfully");
 
-          return new Response(JSON.stringify(result), {
+          return new Response(JSON.stringify(result.data), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });
@@ -274,19 +271,6 @@ export const toolsController = {
             "📝 Tools Web Q&A Request Body:",
             JSON.stringify(body, null, 2)
           );
-
-          // Validate auth token
-          if (!validateAuthToken(request)) {
-            return new Response(
-              JSON.stringify({
-                answers: ["Forbidden: Invalid or missing authentication token"],
-              }),
-              {
-                status: 403,
-                headers: { "Content-Type": "application/json" },
-              }
-            );
-          }
 
           // Basic input validation
           if (!body || typeof body !== "object") {
