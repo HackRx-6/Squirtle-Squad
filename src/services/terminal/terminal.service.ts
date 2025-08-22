@@ -113,12 +113,15 @@ export class TerminalService {
 
       // Check if any malicious content was detected and cleaned
       if (originalCommand !== cleanedCommand) {
-        console.warn("🚨 [Terminal] Potential prompt injection detected and cleaned in command", {
-          originalCommand: originalCommand.substring(0, 100) + "...",
-          cleanedCommand: cleanedCommand.substring(0, 100) + "...",
-          originalLength: originalCommand.length,
-          cleanedLength: cleanedCommand.length,
-        });
+        console.warn(
+          "🚨 [Terminal] Potential prompt injection detected and cleaned in command",
+          {
+            originalCommand: originalCommand.substring(0, 100) + "...",
+            cleanedCommand: cleanedCommand.substring(0, 100) + "...",
+            originalLength: originalCommand.length,
+            cleanedLength: cleanedCommand.length,
+          }
+        );
       }
 
       // Use cleaned command for execution

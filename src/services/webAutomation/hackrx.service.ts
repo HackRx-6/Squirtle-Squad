@@ -338,7 +338,9 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       }
 
       // Clean documents for prompt injection attacks
-      this.logger.debug("Cleaning documents for prompt injection", { sessionId });
+      this.logger.debug("Cleaning documents for prompt injection", {
+        sessionId,
+      });
       const originalDocuments = request.documents;
       const cleanedDocuments = PromptInjectionProtectionService.sanitizeText(
         request.documents,
@@ -353,12 +355,15 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
       // Check if any malicious content was detected and cleaned
       if (originalDocuments !== cleanedDocuments) {
-        this.logger.warn("Potential prompt injection detected and cleaned in documents", {
-          sessionId,
-          originalLength: originalDocuments.length,
-          cleanedLength: cleanedDocuments.length,
-          documentsPreview: originalDocuments.substring(0, 200) + "...",
-        });
+        this.logger.warn(
+          "Potential prompt injection detected and cleaned in documents",
+          {
+            sessionId,
+            originalLength: originalDocuments.length,
+            cleanedLength: cleanedDocuments.length,
+            documentsPreview: originalDocuments.substring(0, 200) + "...",
+          }
+        );
 
         loggingService.warn(
           "Prompt injection patterns detected and cleaned from documents",
@@ -382,19 +387,24 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       });
 
       // Clean questions for prompt injection attacks
-      this.logger.debug("Cleaning questions for prompt injection", { sessionId });
+      this.logger.debug("Cleaning questions for prompt injection", {
+        sessionId,
+      });
       const originalQuestions = [...request.questions];
       const cleanedQuestions: string[] = [];
       let questionsChanged = false;
 
       for (let i = 0; i < request.questions.length; i++) {
         const originalQuestion = request.questions[i];
-        if (typeof originalQuestion !== 'string') {
-          this.logger.error(`Question ${i + 1} is not a string during cleaning`, {
-            sessionId,
-            questionIndex: i + 1,
-            questionType: typeof originalQuestion,
-          });
+        if (typeof originalQuestion !== "string") {
+          this.logger.error(
+            `Question ${i + 1} is not a string during cleaning`,
+            {
+              sessionId,
+              questionIndex: i + 1,
+              questionType: typeof originalQuestion,
+            }
+          );
           continue;
         }
 
@@ -413,23 +423,35 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
         if (originalQuestion !== cleanedQuestion) {
           questionsChanged = true;
-          this.logger.warn(`Potential prompt injection detected and cleaned in question ${i + 1}`, {
-            sessionId,
-            questionIndex: i + 1,
-            originalLength: originalQuestion.length,
-            cleanedLength: cleanedQuestion.length,
-            questionPreview: originalQuestion.substring(0, 100) + "...",
-          });
+          this.logger.warn(
+            `Potential prompt injection detected and cleaned in question ${
+              i + 1
+            }`,
+            {
+              sessionId,
+              questionIndex: i + 1,
+              originalLength: originalQuestion.length,
+              cleanedLength: cleanedQuestion.length,
+              questionPreview: originalQuestion.substring(0, 100) + "...",
+            }
+          );
         }
       }
 
       if (questionsChanged) {
-        this.logger.warn("Prompt injection patterns detected and cleaned from questions", {
-          sessionId,
-          questionsCount: request.questions.length,
-          originalQuestions: originalQuestions.map(q => q.substring(0, 50) + "..."),
-          cleanedQuestions: cleanedQuestions.map(q => q.substring(0, 50) + "..."),
-        });
+        this.logger.warn(
+          "Prompt injection patterns detected and cleaned from questions",
+          {
+            sessionId,
+            questionsCount: request.questions.length,
+            originalQuestions: originalQuestions.map(
+              (q) => q.substring(0, 50) + "..."
+            ),
+            cleanedQuestions: cleanedQuestions.map(
+              (q) => q.substring(0, 50) + "..."
+            ),
+          }
+        );
 
         loggingService.warn(
           "Prompt injection patterns detected and cleaned from questions",
@@ -488,18 +510,24 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
       // Clean prompts using prompt injection protection
       this.logger.debug("Cleaning prompts for security", { sessionId });
-      
-      const systemPrompt = PromptInjectionProtectionService.sanitizeText(rawSystemPrompt, {
-        strictMode: true,
-        azureContentPolicy: true,
-        logSuspiciousContent: true
-      });
-      
-      const userMessage = PromptInjectionProtectionService.sanitizeText(rawUserMessage, {
-        strictMode: true,
-        azureContentPolicy: true,
-        logSuspiciousContent: true
-      });
+
+      const systemPrompt = PromptInjectionProtectionService.sanitizeText(
+        rawSystemPrompt,
+        {
+          strictMode: true,
+          azureContentPolicy: true,
+          logSuspiciousContent: true,
+        }
+      );
+
+      const userMessage = PromptInjectionProtectionService.sanitizeText(
+        rawUserMessage,
+        {
+          strictMode: true,
+          azureContentPolicy: true,
+          logSuspiciousContent: true,
+        }
+      );
 
       this.logger.info("Prompts created and cleaned", {
         sessionId,

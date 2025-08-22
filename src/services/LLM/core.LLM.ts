@@ -216,17 +216,19 @@ export class LLMService implements LLMProvider {
           console.log(`🤖 Generating response with primary LLM...`);
 
           // Clean prompts for security before sending to LLM
-          const cleanedSystemPrompt = PromptInjectionProtectionService.sanitizeText(systemPrompt, {
-            strictMode: true,
-            azureContentPolicy: true,
-            logSuspiciousContent: true
-          });
-          
-          const cleanedUserMessage = PromptInjectionProtectionService.sanitizeText(userMessage, {
-            strictMode: true,
-            azureContentPolicy: true,
-            logSuspiciousContent: true
-          });
+          const cleanedSystemPrompt =
+            PromptInjectionProtectionService.sanitizeText(systemPrompt, {
+              strictMode: true,
+              azureContentPolicy: true,
+              logSuspiciousContent: true,
+            });
+
+          const cleanedUserMessage =
+            PromptInjectionProtectionService.sanitizeText(userMessage, {
+              strictMode: true,
+              azureContentPolicy: true,
+              logSuspiciousContent: true,
+            });
 
           this.logger.debug("Prompts cleaned for security", {
             originalSystemLength: systemPrompt.length,
@@ -1105,17 +1107,19 @@ export class LLMService implements LLMProvider {
               );
 
               // Clean prompts for security before sending to LLM
-              const cleanedSystemPrompt = PromptInjectionProtectionService.sanitizeText(systemPrompt, {
-                strictMode: true,
-                azureContentPolicy: true,
-                logSuspiciousContent: false // Reduce logging in batch mode
-              });
-              
-              const cleanedUserMessage = PromptInjectionProtectionService.sanitizeText(userMessage, {
-                strictMode: true,
-                azureContentPolicy: true,
-                logSuspiciousContent: false
-              });
+              const cleanedSystemPrompt =
+                PromptInjectionProtectionService.sanitizeText(systemPrompt, {
+                  strictMode: true,
+                  azureContentPolicy: true,
+                  logSuspiciousContent: false, // Reduce logging in batch mode
+                });
+
+              const cleanedUserMessage =
+                PromptInjectionProtectionService.sanitizeText(userMessage, {
+                  strictMode: true,
+                  azureContentPolicy: true,
+                  logSuspiciousContent: false,
+                });
 
               const textOutput = await runWithToolsIfRequested(
                 client,
