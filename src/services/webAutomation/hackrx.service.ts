@@ -27,14 +27,20 @@ export interface HackRXError {
 
 export class HackRXService {
   private static instance: HackRXService;
+  private logger = loggingService.createComponentLogger("HackRXService");
 
   private constructor() {
+    this.logger.info("HackRXService initialized");
     // No need to instantiate LLMService here, we'll create the client directly
   }
 
   public static getInstance(): HackRXService {
     if (!HackRXService.instance) {
       HackRXService.instance = new HackRXService();
+      loggingService.info(
+        "HackRXService singleton instance created",
+        "HackRXService"
+      );
     }
     return HackRXService.instance;
   }
@@ -43,7 +49,16 @@ export class HackRXService {
     isValid: boolean;
     error?: HackRXError;
   } {
+    this.logger.debug("Validating HackRX request", {
+      url: request.url,
+      questionsCount: request.questions?.length || 0,
+    });
+
     if (!request.url || typeof request.url !== "string") {
+      this.logger.warn("Validation failed: Invalid URL provided", {
+        url: request.url,
+        urlType: typeof request.url,
+      });
       return {
         isValid: false,
         error: {
@@ -58,6 +73,11 @@ export class HackRXService {
       !Array.isArray(request.questions) ||
       request.questions.length === 0
     ) {
+      this.logger.warn("Validation failed: Invalid questions array", {
+        questions: request.questions,
+        isArray: Array.isArray(request.questions),
+        length: request.questions?.length || 0,
+      });
       return {
         isValid: false,
         error: {
@@ -69,6 +89,14 @@ export class HackRXService {
 
     for (let i = 0; i < request.questions.length; i++) {
       if (typeof request.questions[i] !== "string") {
+        this.logger.warn(
+          `Validation failed: Question ${i + 1} is not a string`,
+          {
+            questionIndex: i,
+            questionType: typeof request.questions[i],
+            question: request.questions[i],
+          }
+        );
         return {
           isValid: false,
           error: {
@@ -78,6 +106,11 @@ export class HackRXService {
         };
       }
     }
+
+    this.logger.debug("Request validation successful", {
+      url: request.url,
+      questionsCount: request.questions.length,
+    });
 
     return { isValid: true };
   }
@@ -119,11 +152,13 @@ When using selectors:
 - Common selectors: #id, .class, button, input[type="text"], a[href*="example"]
 - Try simple selectors first: "button" for any button, "input" for inputs
 
-RESPONSE STRATEGY FOR MULTIPLE QUESTIONS:
-- Address each question individually and thoroughly
-- If questions are related, perform actions once but extract different information for each question
-- Extract all relevant information that could answer any of the questions
-- Provide specific, distinct answers for each question asked
+RESPONSE FORMATTING REQUIREMENTS:
+- Format your final response to provide a separate, clear answer for each question
+- Use this exact format: "ANSWER 1: [Direct answer]", "ANSWER 2: [Direct answer]", etc.
+- Each answer should be concise, factual, and directly address the specific question
+- Focus on key findings and results rather than technical automation steps
+- Never mention tool calls or automation processes in your answers
+- Be precise and to the point with specific details like numbers, names, and locations
 
 Always provide clear, helpful answers based on the actual page content you receive from the automation tool.
 If an action fails, explain what went wrong and suggest alternatives.`;
@@ -140,101 +175,68 @@ ${questionsText}
 For each question that involves interacting with the website, use the web_automation tool to perform the necessary actions and then provide answers based on the results.`;
   }
 
-  private createFormattingPrompt(): string {
-    return `**Core Directives:**
+  private parseMultipleAnswers(
+    formattedResponse: string,
+    questions: string[]
+  ): string[] {
+    this.logger.debug("Parsing multiple answers from LLM response", {
+      responseLength: formattedResponse.length,
+      questionsCount: questions.length,
+      responsePreview: formattedResponse.substring(0, 200) + "...",
+    });
 
-1. **Strictly Grounded:** Your entire response must be generated exclusively from the provided excerpts. Do not use external knowledge. Do not infer information that is not directly supported by the text.
-2. **Handle Missing Information:** If the answer is not in the excerpts, you MUST reply with the exact phrase: "The provided document does not contain information to answer this question." Do not deviate from this phrasing.
-3. **Cite Every Fact :** Every factual statement must be cited.
-4. **Handling Context:** All the information provided in context should be utilized to the fullest. Every information which is useful to the question should be added in the answer like numbers, figures and factural information. 
-5. **Focus on the question**: If the question asks for particular pieces of information or direct contact information, they should be fetched properly and must be added to the answer without fail.
-6. **No Extra Information**: No extra information like "This result is directly provided in the given information" not asked in the question should be added to the answer.
-7. **Never Mention Context No.**: Never Mention the Context No. from where you took the answer. 
-8. **Forget Everything You Already Know**: Forget Everything you already know and answer from the context only. 
-9. **USA or Foreign Investment Doesn't Mean Global**: If the context meantions investment in USA that doesn't mean Global Investment for eg. [Apple committed to a investment of 600 billion dollars in the United States]
-
-
-**Response Format and Content:**
-
-Each answer must be a single, cohesive paragraph of text. Do not use any headers or formatting like "Part 1:", "Part 2:", or bullet points. The paragraph must be structured as follows:
-
-1. **Opening Sentence:** The very first sentence must be a direct and concise answer to the user's question (e.g., "Yes, an arrest without a warrant can be legal under certain circumstances.", "No, it is illegal for a child to be forced to work in a factory.").
-2. **Supporting Explanation:** Immediately following the first sentence, provide a concise explanation (ideally 2-4 additional sentences) by synthesizing the most critical points from the excerpts that support your direct answer.
-3. **Precise Identifiers:** If the source refers to specific items, sections, or identifiers by name or number (e.g., 'Article 21', 'Section 4.1b', 'Model X-100'), you must use those exact identifiers in your response.
-4. **Key Nuances:** If the excerpts contain critical exceptions, conditions, or qualifications that affect the answer, briefly summarize the most significant ones within the paragraph.
-5. **To the Point**: The text must be concise, accurate and to the point. 
-6. **Never use the word CONTEXT** add what you cited from the context but NEVER use the word CONTEXT. 
-7. **Exact Specific Word** ANY TIME you see a specific detail like a location (U.S., China), a company name, a number, or an official program title, USE THAT EXACT WORD in your answer.
-
-**Tone and Style:**
-
-- **Tone:** Formal, objective, and factual.
-- **Style:** Clear and direct. Eliminate all conversational filler and introductory phrases. The entire response should be a dense, information-rich paragraph with every claim cited.
-
-## General Instructions
-Write an accurate, comprehensive response to the user's query. Your answer must be precise, of high-quality, and written by an expert
-
-OUTPUT FORMAT:
-•⁠  ⁠YOU Never cite the tool calls, like: im executing xyz, opening xyz
-•⁠  ⁠You Just Returns the Output
-•⁠  ⁠Focus on what YOU GOT in OUTPUT RATHER THAN DESCRIBING EVERY STEP
-`
-;
-  }
-
-  private createFormattingMessage(
-    questions: string[],
-    rawResults: string
-  ): string {
-    const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join("\n");
-
-    return `Original user questions:
-${questionsText}
-
-Raw automation results:
-${rawResults}
-
-Please provide a separate, clear answer for each question. Format your response as follows:
-
-ANSWER 1: [Direct answer to question 1]
-ANSWER 2: [Direct answer to question 2]
-ANSWER 3: [Direct answer to question 3]
-... and so on for each question.
-
-Each answer should be on its own line and directly address the specific question asked. Focus on the key findings and results rather than the technical automation process.`;
-  }
-
-  private parseMultipleAnswers(formattedResponse: string, questions: string[]): string[] {
     const answers: string[] = [];
-    
+
     // Try to parse answers in the format "ANSWER 1:", "ANSWER 2:", etc.
     const answerRegex = /ANSWER\s+(\d+):\s*(.+?)(?=ANSWER\s+\d+:|$)/gs;
     const matches = [...formattedResponse.matchAll(answerRegex)];
-    
+
     if (matches.length > 0) {
+      this.logger.info("Found structured answers in response", {
+        matchCount: matches.length,
+        expectedAnswers: questions.length,
+      });
+
       // Sort matches by answer number to ensure correct order
       matches.sort((a, b) => {
         const aNum = a[1] ? parseInt(a[1]) : 0;
         const bNum = b[1] ? parseInt(b[1]) : 0;
         return aNum - bNum;
       });
-      
+
       for (const match of matches) {
         const answerText = match[2]?.trim() || "";
         if (answerText) {
           answers.push(answerText);
+          this.logger.debug(`Parsed answer ${answers.length}`, {
+            answerLength: answerText.length,
+            answerPreview: answerText.substring(0, 100) + "...",
+          });
         }
       }
-      
+
       // If we don't have enough answers, fill with the formatted response
       while (answers.length < questions.length) {
+        this.logger.warn("Filling missing answer with full response", {
+          currentAnswers: answers.length,
+          expectedAnswers: questions.length,
+        });
         answers.push(formattedResponse.trim());
       }
     } else {
+      this.logger.warn("No structured answers found, using fallback parsing", {
+        responseLength: formattedResponse.length,
+      });
+
       // Fallback: try to split by line breaks and map to questions
-      const lines = formattedResponse.split('\n').filter(line => line.trim());
-      
+      const lines = formattedResponse.split("\n").filter((line) => line.trim());
+
       if (lines.length >= questions.length) {
+        this.logger.info("Using line-based answer parsing", {
+          lineCount: lines.length,
+          questionsCount: questions.length,
+        });
+
         // Use the first N lines as answers
         for (let i = 0; i < questions.length; i++) {
           const line = lines[i];
@@ -245,24 +247,64 @@ Each answer should be on its own line and directly address the specific question
           }
         }
       } else {
+        this.logger.warn(
+          "Using full response for each question as final fallback",
+          {
+            lineCount: lines.length,
+            questionsCount: questions.length,
+          }
+        );
+
         // Fallback: use the full response for each question
         for (let i = 0; i < questions.length; i++) {
           answers.push(formattedResponse.trim());
         }
       }
     }
-    
-    return answers.slice(0, questions.length); // Ensure we don't have more answers than questions
+
+    const finalAnswers = answers.slice(0, questions.length);
+    this.logger.info("Answer parsing completed", {
+      parsedAnswers: finalAnswers.length,
+      expectedAnswers: questions.length,
+      answerLengths: finalAnswers.map((a) => a.length),
+    });
+
+    return finalAnswers; // Ensure we don't have more answers than questions
   }
 
   public async processHackRX(
     request: HackRXRequest,
     timerContext: TimerContext
   ): Promise<{ success: boolean; data?: HackRXResponse; error?: HackRXError }> {
+    const sessionId = `hackrx_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    const startTime = Date.now();
+
+    this.logger.info("Starting HackRX processing session", {
+      sessionId,
+      url: request.url,
+      questionsCount: request.questions.length,
+      questions: request.questions.map(
+        (q, i) =>
+          `${i + 1}. ${q.substring(0, 100)}${q.length > 100 ? "..." : ""}`
+      ),
+      timeRemaining: Math.max(
+        0,
+        timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+      ),
+    });
+
     try {
       // Validate request
+      this.logger.debug("Validating request", { sessionId });
       const validation = this.validateRequest(request);
       if (!validation.isValid) {
+        this.logger.error("Request validation failed", {
+          sessionId,
+          error: validation.error,
+          processingTimeMs: Date.now() - startTime,
+        });
         return {
           success: false,
           error: validation.error,
@@ -271,6 +313,14 @@ Each answer should be on its own line and directly address the specific question
 
       // Check timeout before processing
       if (timerContext.isExpired) {
+        this.logger.error("Request timed out before processing could begin", {
+          sessionId,
+          timeRemaining: Math.max(
+            0,
+            timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+          ),
+          processingTimeMs: Date.now() - startTime,
+        });
         return {
           success: false,
           error: {
@@ -284,18 +334,27 @@ Each answer should be on its own line and directly address the specific question
         `Starting HackRX processing for ${request.url}`,
         "HackRXService",
         {
+          sessionId,
           questionsCount: request.questions.length,
         }
       );
 
       // Create prompts
+      this.logger.debug("Creating prompts for LLM", { sessionId });
       const systemPrompt = this.createSystemPrompt();
       const userMessage = this.createUserMessage(
         request.url,
         request.questions
       );
 
+      this.logger.info("Prompts created", {
+        sessionId,
+        systemPromptLength: systemPrompt.length,
+        userMessageLength: userMessage.length,
+      });
+
       // Get LLM config and create client directly
+      this.logger.debug("Initializing LLM client", { sessionId });
       const aiConfig = Config.ai;
       const llmConfig = aiConfig.getLLMConfig();
 
@@ -305,8 +364,21 @@ Each answer should be on its own line and directly address the specific question
         baseURL: llmConfig.primary.baseURL,
       });
 
+      this.logger.info("LLM client initialized", {
+        sessionId,
+        model: llmConfig.primary.model,
+        baseURL: llmConfig.primary.baseURL,
+      });
+
       // Use tool-enabled LLM processing
       try {
+        this.logger.info("Starting LLM processing with tools", {
+          sessionId,
+          model: llmConfig.primary.model,
+          maxToolLoops: 7,
+        });
+
+        const llmStartTime = Date.now();
         const rawResponse = await runWithToolsIfRequested(
           client,
           llmConfig.primary.model,
@@ -319,8 +391,24 @@ Each answer should be on its own line and directly address the specific question
           }
         );
 
+        const llmProcessingTime = Date.now() - llmStartTime;
+        this.logger.info("LLM processing completed", {
+          sessionId,
+          processingTimeMs: llmProcessingTime,
+          responseLength: rawResponse.length,
+          responsePreview: rawResponse.substring(0, 200) + "...",
+        });
+
         // Check timeout after LLM processing
         if (timerContext.isExpired) {
+          this.logger.error("Request timed out during LLM processing", {
+            sessionId,
+            llmProcessingTimeMs: llmProcessingTime,
+            timeRemaining: Math.max(
+              0,
+              timerContext.timeoutMs - (Date.now() - timerContext.startTime)
+            ),
+          });
           return {
             success: false,
             error: {
@@ -330,56 +418,16 @@ Each answer should be on its own line and directly address the specific question
           };
         }
 
-        // Check timeout before second pass
-        if (timerContext.isExpired) {
-          // If we're running out of time, return the raw response
-          loggingService.warn(
-            "Timeout approaching, skipping formatting pass",
-            "HackRXService"
-          );
-          const answers = [rawResponse.trim()];
+        loggingService.info("HackRX processing completed", "HackRXService");
 
-          return {
-            success: true,
-            data: {
-              answers,
-              metadata: {
-                url: request.url,
-                processedAt: Date.now(),
-                toolsUsed: true,
-              },
-            },
-          };
-        }
-
-        loggingService.info(
-          "Starting second pass: formatting response for user",
-          "HackRXService"
-        );
-
-        // Second pass: Format the response for the user with original questions
-        const formattingPrompt = this.createFormattingPrompt();
-        const formattingMessage = this.createFormattingMessage(
-          request.questions,
-          rawResponse.trim()
-        );
-
-        const finalResponse = await client.chat.completions.create({
-          model: llmConfig.primary.model,
-          messages: [
-            { role: "system", content: formattingPrompt },
-            { role: "user", content: formattingMessage },
-          ],
+        // Parse the response to extract individual answers for each question
+        this.logger.info("Parsing LLM response into individual answers", {
+          sessionId,
         });
-
-        const formattedAnswer =
-          finalResponse.choices[0]?.message?.content?.trim() ||
-          rawResponse.trim();
-
-        loggingService.info("Response formatting completed", "HackRXService");
-
-        // Parse the formatted answer to extract individual answers for each question
-        const answers = this.parseMultipleAnswers(formattedAnswer, request.questions);
+        const answers = this.parseMultipleAnswers(
+          rawResponse.trim(),
+          request.questions
+        );
 
         const result: HackRXResponse = {
           answers,
@@ -390,24 +438,46 @@ Each answer should be on its own line and directly address the specific question
           },
         };
 
+        const totalProcessingTime = Date.now() - startTime;
         loggingService.info(
           "HackRX processing completed successfully",
           "HackRXService",
           {
+            sessionId,
             questionsCount: request.questions.length,
             answersCount: answers.length,
+            totalProcessingTimeMs: totalProcessingTime,
+            llmProcessingTimeMs: llmProcessingTime,
           }
         );
+
+        this.logger.info("HackRX session completed successfully", {
+          sessionId,
+          questionsCount: request.questions.length,
+          answersCount: answers.length,
+          totalProcessingTimeMs: totalProcessingTime,
+          llmProcessingTimeMs: llmProcessingTime,
+          finalUrl: request.url,
+        });
 
         return {
           success: true,
           data: result,
         };
       } catch (llmError: any) {
+        const processingTime = Date.now() - startTime;
+        this.logger.error("LLM processing error in HackRX", {
+          sessionId,
+          error: llmError.message,
+          stack: llmError.stack,
+          processingTimeMs: processingTime,
+        });
+
         loggingService.error(
           "LLM processing error in HackRX",
           "HackRXService",
           {
+            sessionId,
             error: llmError.message,
           }
         );
@@ -422,10 +492,19 @@ Each answer should be on its own line and directly address the specific question
         };
       }
     } catch (error: any) {
+      const processingTime = Date.now() - startTime;
+      this.logger.error("Unexpected error in HackRX processing", {
+        sessionId,
+        error: error.message,
+        stack: error.stack,
+        processingTimeMs: processingTime,
+      });
+
       loggingService.error(
         "Unexpected error in HackRX processing",
         "HackRXService",
         {
+          sessionId,
           error: error.message,
         }
       );
@@ -443,7 +522,16 @@ Each answer should be on its own line and directly address the specific question
 
   // Cleanup method for graceful shutdown
   public async cleanup(): Promise<void> {
-    await playwrightService.cleanup();
+    this.logger.info("Starting HackRXService cleanup");
+
+    try {
+      await playwrightService.cleanup();
+      this.logger.info("PlaywrightService cleanup completed");
+    } catch (error) {
+      this.logger.error("Error during HackRXService cleanup", { error });
+    }
+
+    this.logger.info("HackRXService cleanup completed");
   }
 }
 

@@ -10,6 +10,61 @@ type ToolChoice =
   | { type: "function"; function: { name: string } };
 
 /**
+ * Simple session tracker for web automation sessions
+ */
+class WebAutomationSessionTracker {
+  private static instance: WebAutomationSessionTracker;
+  private currentSessionId: string | null = null;
+  private sessionStartTime: number = 0;
+  private readonly SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+  private constructor() {}
+
+  public static getInstance(): WebAutomationSessionTracker {
+    if (!WebAutomationSessionTracker.instance) {
+      WebAutomationSessionTracker.instance = new WebAutomationSessionTracker();
+    }
+    return WebAutomationSessionTracker.instance;
+  }
+
+  public getOrCreateSessionId(): string {
+    const now = Date.now();
+
+    // Check if current session is still valid
+    if (
+      this.currentSessionId &&
+      now - this.sessionStartTime < this.SESSION_TIMEOUT_MS
+    ) {
+      console.log(
+        `🎭 [SessionTracker] Reusing session: ${this.currentSessionId}`
+      );
+      return this.currentSessionId;
+    }
+
+    // Create new session
+    this.currentSessionId = `llm_persistent_${now}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    this.sessionStartTime = now;
+
+    console.log(
+      `🎭 [SessionTracker] Created new session: ${this.currentSessionId}`
+    );
+    return this.currentSessionId;
+  }
+
+  public invalidateSession(): void {
+    if (this.currentSessionId) {
+      console.log(
+        `🎭 [SessionTracker] Invalidating session: ${this.currentSessionId}`
+      );
+      this.currentSessionId = null;
+      this.sessionStartTime = 0;
+    }
+  }
+}
+
+/**
  * Determines the appropriate tool choice strategy based on configuration and context
  */
 export const getRecommendedToolChoice = (
@@ -44,72 +99,72 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
   }
 
   const tools: OpenAITool[] = [
-    {
-      type: "function",
-      function: {
-        name: "http_get_json_batch",
-        description:
-          "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON for each Call this when a city has multiple different landmarks present.",
-        parameters: {
-          type: "object",
-          properties: {
-            urls: {
-              type: "array",
-              items: { type: "string" },
-              description: "List of absolute URLs to fetch (http/https).",
-            },
-            headers: {
-              type: "object",
-              description: "Optional HTTP headers to include",
-              additionalProperties: { type: "string" },
-            },
-          },
-          required: ["urls"],
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "resolve_flight_number",
-        description:
-          "Given a city and a list of candidate flight-number API endpoints, call each endpoint, verify the response corresponds to the specified city, and return the best-matching flight number. If none match, return a fallback from any response.",
-        parameters: {
-          type: "object",
-          properties: {
-            city: {
-              type: "string",
-              description:
-                "Target city to validate against API responses (case-insensitive)",
-            },
-            endpoints: {
-              type: "array",
-              items: { type: "string" },
-              description:
-                "List of absolute URLs to query for flight number candidates",
-            },
-            headers: {
-              type: "object",
-              description: "Optional HTTP headers to include for all requests",
-              additionalProperties: { type: "string" },
-            },
-            matchKeys: {
-              type: "array",
-              items: { type: "string" },
-              description:
-                "Optional list of JSON keys to prioritize when checking for city name (e.g., ['city','ticket.city'])",
-            },
-          },
-          required: ["city", "endpoints"],
-        },
-      },
-    },
+    // {
+    //   type: "function",
+    //   function: {
+    //     name: "http_get_json_batch",
+    //     description:
+    //       "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON for each Call this when a city has multiple different landmarks present.",
+    //     parameters: {
+    //       type: "object",
+    //       properties: {
+    //         urls: {
+    //           type: "array",
+    //           items: { type: "string" },
+    //           description: "List of absolute URLs to fetch (http/https).",
+    //         },
+    //         headers: {
+    //           type: "object",
+    //           description: "Optional HTTP headers to include",
+    //           additionalProperties: { type: "string" },
+    //         },
+    //       },
+    //       required: ["urls"],
+    //     },
+    //   },
+    // },
+    // {
+    //   type: "function",
+    //   function: {
+    //     name: "resolve_flight_number",
+    //     description:
+    //       "Given a city and a list of candidate flight-number API endpoints, call each endpoint, verify the response corresponds to the specified city, and return the best-matching flight number. If none match, return a fallback from any response.",
+    //     parameters: {
+    //       type: "object",
+    //       properties: {
+    //         city: {
+    //           type: "string",
+    //           description:
+    //             "Target city to validate against API responses (case-insensitive)",
+    //         },
+    //         endpoints: {
+    //           type: "array",
+    //           items: { type: "string" },
+    //           description:
+    //             "List of absolute URLs to query for flight number candidates",
+    //         },
+    //         headers: {
+    //           type: "object",
+    //           description: "Optional HTTP headers to include for all requests",
+    //           additionalProperties: { type: "string" },
+    //         },
+    //         matchKeys: {
+    //           type: "array",
+    //           items: { type: "string" },
+    //           description:
+    //             "Optional list of JSON keys to prioritize when checking for city name (e.g., ['city','ticket.city'])",
+    //         },
+    //       },
+    //       required: ["city", "endpoints"],
+    //     },
+    //   },
+    // },
     {
       type: "function",
       function: {
         name: "web_automation",
         description:
-          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Use this when you need to interact with web pages programmatically. Returns structured page content including text, buttons, links, and forms.",
+          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.",
         parameters: {
           type: "object",
           properties: {
@@ -214,160 +269,160 @@ export const executeToolCall = async (
     const startedAt = Date.now();
     console.log(`🛠️ [ToolCall:start] name=${name} args=${previewString(args)}`);
     switch (name) {
-      case "resolve_flight_number": {
-        const { city, endpoints, headers, matchKeys } = args as {
-          city: string;
-          endpoints: string[];
-          headers?: Record<string, string>;
-          matchKeys?: string[];
-        };
-        const cityLower = (city || "").trim().toLowerCase();
-        if (!cityLower || !Array.isArray(endpoints) || endpoints.length === 0) {
-          return JSON.stringify({
-            ok: false,
-            error: "Invalid arguments: provide city and endpoints[]",
-          });
-        }
+      // case "resolve_flight_number": {
+      //   const { city, endpoints, headers, matchKeys } = args as {
+      //     city: string;
+      //     endpoints: string[];
+      //     headers?: Record<string, string>;
+      //     matchKeys?: string[];
+      //   };
+      //   const cityLower = (city || "").trim().toLowerCase();
+      //   if (!cityLower || !Array.isArray(endpoints) || endpoints.length === 0) {
+      //     return JSON.stringify({
+      //       ok: false,
+      //       error: "Invalid arguments: provide city and endpoints[]",
+      //     });
+      //   }
 
-        const qa = AppConfigService.getInstance().getQAConfig();
-        const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
-        const results: Array<{
-          url: string;
-          ok: boolean;
-          status: number;
-          body: any;
-          matched: boolean;
-          candidateFlight?: string | number | null;
-        }> = [];
-        try {
-          for (const url of endpoints) {
-            assertSafeUrl(url);
-            try {
-              const res = await fetch(url, {
-                method: "GET",
-                headers,
-                signal: controller.signal,
-              });
-              const contentType = res.headers.get("content-type") || "";
-              let body: any = null;
-              try {
-                body = await res.json();
-              } catch {
-                const text = await res.text();
-                body = {
-                  _nonJsonTextPreview: text.substring(0, 8000),
-                };
-              }
+      //   const qa = AppConfigService.getInstance().getQAConfig();
+      //   const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
+      //   const controller = new AbortController();
+      //   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      //   const results: Array<{
+      //     url: string;
+      //     ok: boolean;
+      //     status: number;
+      //     body: any;
+      //     matched: boolean;
+      //     candidateFlight?: string | number | null;
+      //   }> = [];
+      //   try {
+      //     for (const url of endpoints) {
+      //       assertSafeUrl(url);
+      //       try {
+      //         const res = await fetch(url, {
+      //           method: "GET",
+      //           headers,
+      //           signal: controller.signal,
+      //         });
+      //         const contentType = res.headers.get("content-type") || "";
+      //         let body: any = null;
+      //         try {
+      //           body = await res.json();
+      //         } catch {
+      //           const text = await res.text();
+      //           body = {
+      //             _nonJsonTextPreview: text.substring(0, 8000),
+      //           };
+      //         }
 
-              const matched = doesBodyMatchCity(body, cityLower, matchKeys);
-              const candidateFlight = extractFlightNumber(body);
-              results.push({
-                url,
-                ok: res.ok,
-                status: res.status,
-                body,
-                matched,
-                candidateFlight,
-              });
-            } catch (e) {
-              results.push({
-                url,
-                ok: false,
-                status: 0,
-                body: {
-                  error: e instanceof Error ? e.message : String(e),
-                },
-                matched: false,
-                candidateFlight: null,
-              });
-            }
-          }
+      //         const matched = doesBodyMatchCity(body, cityLower, matchKeys);
+      //         const candidateFlight = extractFlightNumber(body);
+      //         results.push({
+      //           url,
+      //           ok: res.ok,
+      //           status: res.status,
+      //           body,
+      //           matched,
+      //           candidateFlight,
+      //         });
+      //       } catch (e) {
+      //         results.push({
+      //           url,
+      //           ok: false,
+      //           status: 0,
+      //           body: {
+      //             error: e instanceof Error ? e.message : String(e),
+      //           },
+      //           matched: false,
+      //           candidateFlight: null,
+      //         });
+      //       }
+      //     }
 
-          // Prefer first matched; else fallback to first successful; else any
-          const matched = results.find(
-            (r) => r.ok && r.matched && r.candidateFlight
-          );
-          const successful = results.find((r) => r.ok && r.candidateFlight);
-          const fallback = results[0];
+      //     // Prefer first matched; else fallback to first successful; else any
+      //     const matched = results.find(
+      //       (r) => r.ok && r.matched && r.candidateFlight
+      //     );
+      //     const successful = results.find((r) => r.ok && r.candidateFlight);
+      //     const fallback = results[0];
 
-          const selected = matched || successful || fallback;
-          return JSON.stringify({
-            ok: !!selected?.ok,
-            selectedUrl: selected?.url,
-            matched: !!selected?.matched,
-            candidateFlight: selected?.candidateFlight ?? null,
-            tried: results.map((r) => ({
-              url: r.url,
-              ok: r.ok,
-              status: r.status,
-              matched: r.matched,
-              candidateFlight: r.candidateFlight ?? null,
-            })),
-          });
-        } finally {
-          clearTimeout(timeout);
-        }
-      }
-      case "http_get_json_batch": {
-        const { urls, headers } = args as {
-          urls: string[];
-          headers?: Record<string, string>;
-        };
-        if (!Array.isArray(urls) || urls.length === 0) {
-          return JSON.stringify({
-            ok: false,
-            error: "No urls provided",
-          });
-        }
-        const qa = AppConfigService.getInstance().getQAConfig();
-        const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-          const out: any[] = [];
-          for (const url of urls) {
-            try {
-              assertSafeUrl(url);
-              const res = await fetch(url, {
-                method: "GET",
-                headers,
-                signal: options?.abortSignal || controller.signal,
-              });
-              const contentType = res.headers.get("content-type") || "";
-              let body: any = null;
-              try {
-                body = await res.json();
-              } catch {
-                const text = await res.text();
-                body = {
-                  _nonJsonTextPreview: text.substring(0, 8000),
-                };
-              }
-              out.push({
-                ok: res.ok,
-                status: res.status,
-                contentType,
-                url,
-                body,
-              });
-            } catch (e) {
-              out.push({
-                ok: false,
-                status: 0,
-                url,
-                body: {
-                  error: e instanceof Error ? e.message : String(e),
-                },
-              });
-            }
-          }
-          return JSON.stringify({ ok: true, results: out });
-        } finally {
-          clearTimeout(timeout);
-        }
-      }
+      //     const selected = matched || successful || fallback;
+      //     return JSON.stringify({
+      //       ok: !!selected?.ok,
+      //       selectedUrl: selected?.url,
+      //       matched: !!selected?.matched,
+      //       candidateFlight: selected?.candidateFlight ?? null,
+      //       tried: results.map((r) => ({
+      //         url: r.url,
+      //         ok: r.ok,
+      //         status: r.status,
+      //         matched: r.matched,
+      //         candidateFlight: r.candidateFlight ?? null,
+      //       })),
+      //     });
+      //   } finally {
+      //     clearTimeout(timeout);
+      //   }
+      // }
+      // case "http_get_json_batch": {
+      //   const { urls, headers } = args as {
+      //     urls: string[];
+      //     headers?: Record<string, string>;
+      //   };
+      //   if (!Array.isArray(urls) || urls.length === 0) {
+      //     return JSON.stringify({
+      //       ok: false,
+      //       error: "No urls provided",
+      //     });
+      //   }
+      //   const qa = AppConfigService.getInstance().getQAConfig();
+      //   const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
+      //   const controller = new AbortController();
+      //   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      //   try {
+      //     const out: any[] = [];
+      //     for (const url of urls) {
+      //       try {
+      //         assertSafeUrl(url);
+      //         const res = await fetch(url, {
+      //           method: "GET",
+      //           headers,
+      //           signal: options?.abortSignal || controller.signal,
+      //         });
+      //         const contentType = res.headers.get("content-type") || "";
+      //         let body: any = null;
+      //         try {
+      //           body = await res.json();
+      //         } catch {
+      //           const text = await res.text();
+      //           body = {
+      //             _nonJsonTextPreview: text.substring(0, 8000),
+      //           };
+      //         }
+      //         out.push({
+      //           ok: res.ok,
+      //           status: res.status,
+      //           contentType,
+      //           url,
+      //           body,
+      //         });
+      //       } catch (e) {
+      //         out.push({
+      //           ok: false,
+      //           status: 0,
+      //           url,
+      //           body: {
+      //             error: e instanceof Error ? e.message : String(e),
+      //           },
+      //         });
+      //       }
+      //     }
+      //     return JSON.stringify({ ok: true, results: out });
+      //   } finally {
+      //     clearTimeout(timeout);
+      //   }
+      // }
       case "web_automation": {
         const { url, actions, options } = args as {
           url: string;
@@ -406,17 +461,27 @@ export const executeToolCall = async (
         }
 
         try {
-          console.log(`🎭 [WebAutomation] Starting automation for ${url}`);
-          const result = await playwrightService.executeWebAutomation({
-            url,
-            actions,
-            options: {
-              headless: options?.headless ?? true,
-              timeout: options?.timeout || 30000,
-              waitForNetworkIdle: options?.waitForNetworkIdle ?? false,
-              includeContent: options?.includeContent ?? true,
+          console.log(
+            `🎭 [WebAutomation] Starting persistent automation for ${url}`
+          );
+
+          // Get or create a persistent session ID
+          const sessionTracker = WebAutomationSessionTracker.getInstance();
+          const sessionId = sessionTracker.getOrCreateSessionId();
+
+          const result = await playwrightService.executeWebAutomationPersistent(
+            {
+              url,
+              actions,
+              options: {
+                headless: options?.headless ?? true,
+                timeout: options?.timeout || 15000, // Reduced from 30000ms to 15000ms
+                waitForNetworkIdle: options?.waitForNetworkIdle ?? false,
+                includeContent: options?.includeContent ?? true,
+              },
             },
-          });
+            sessionId
+          );
 
           if (!result.success) {
             return JSON.stringify({
@@ -433,6 +498,11 @@ export const executeToolCall = async (
           });
         } catch (error: any) {
           console.error(`❌ [WebAutomation] Error:`, error);
+
+          // Invalidate session on persistent web automation errors
+          const sessionTracker = WebAutomationSessionTracker.getInstance();
+          sessionTracker.invalidateSession();
+
           return JSON.stringify({
             ok: false,
             error: error.message || "Unknown web automation error",
