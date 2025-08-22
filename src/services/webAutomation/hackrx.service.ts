@@ -160,10 +160,16 @@ CRITICAL:
 - Test immediately after writing
 
 ## GIT OPERATIONS:
-For Git tasks, use execute_terminal_command to:
+For Git tasks, use simple operations only:
 - Add files: git add .
-- Commit: git commit -m "Add ROUND_6 solution"
-- Push: git push origin main
+- Commit: git commit -m "message"  
+- Push: git push (use current branch and remote)
+
+CRITICAL: 
+- DO NOT change remotes (no git remote add/set-url)
+- DO NOT change branches (no git branch -M or git checkout)
+- DO NOT initialize new repos (no git init unless in empty directory)
+- Use existing repository setup and current branch
 
 CRITICAL: When writing code, ensure proper indentation using spaces (4 spaces per level)
 
@@ -189,6 +195,7 @@ ${questionsText}
 IMPORTANT: 
 1. Use printf with \n for writing code files to preserve indentation (NOT cat with heredoc)
 2. If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
+3. For Git: Only use simple operations - git add, git commit, git push. DO NOT change remotes, branches, or initialize repos.
 
 Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
   }
