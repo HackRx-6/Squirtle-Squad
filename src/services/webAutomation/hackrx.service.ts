@@ -291,8 +291,6 @@ Please format this into a clear, user-friendly response that directly answers th
 
         const finalResponse = await client.chat.completions.create({
           model: llmConfig.primary.model,
-          max_tokens: 1000,
-          temperature: 0.1,
           messages: [
             { role: "system", content: formattingPrompt },
             { role: "user", content: formattingMessage },
