@@ -445,7 +445,7 @@ export class LLMService implements LLMProvider {
         try {
             const stream = await claudeClient.chat.completions.create({
                 model: this.claudeConfig.primary.model,
-                max_tokens: 300,
+                max_tokens: 1000,
                 temperature: 0.1,
                 stream: true,
                 messages: [
@@ -458,6 +458,7 @@ export class LLMService implements LLMProvider {
                         content: userMessage,
                     },
                 ],
+                reasoning_effort:"low"
             });
 
             // Convert OpenAI stream to ReadableStream<string>

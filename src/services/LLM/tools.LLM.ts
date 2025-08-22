@@ -357,9 +357,10 @@ export const runWithToolsIfRequested = async (
         const resp = await client.chat.completions.create(
             {
                 model,
-                max_tokens: 300,
+                max_tokens: 1000,
                 temperature: 0.1,
                 messages,
+                reasoning_effort:"low"
             },
             {
                 signal: options?.abortSignal,
@@ -387,11 +388,12 @@ export const runWithToolsIfRequested = async (
         const response = await client.chat.completions.create(
             {
                 model,
-                max_tokens: 300,
+                max_tokens: 1000,
                 temperature: 0.1,
                 messages,
                 tools,
                 tool_choice: toolChoice,
+                reasoning_effort:"low"
             },
             {
                 signal: options?.abortSignal,
@@ -417,7 +419,7 @@ export const runWithToolsIfRequested = async (
             const fallbackResp = await client.chat.completions.create(
                 {
                     model,
-                    max_tokens: 300,
+                    max_tokens: 1000,
                     temperature: 0.1,
                     messages: [
                         ...messages,
@@ -427,6 +429,7 @@ export const runWithToolsIfRequested = async (
                                 "Provide a clear, direct answer. Do not return empty content.",
                         },
                     ],
+                    reasoning_effort:"low"
                 },
                 {
                     signal: options?.abortSignal,
@@ -531,9 +534,10 @@ export const runWithToolsIfRequested = async (
     const finalResponse = await client.chat.completions.create(
         {
             model,
-            max_tokens: 300,
+            max_tokens: 1000,
             temperature: 0.1,
             messages,
+            reasoning_effort:"low"
             // No tools or tool_choice to force a text response
         },
         {
