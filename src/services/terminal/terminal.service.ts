@@ -108,6 +108,7 @@ export class TerminalService {
           logSuspiciousContent: true,
           azureContentPolicy: true,
           preserveUrls: true,
+          skipDocumentWrapping: true,
         }
       );
 

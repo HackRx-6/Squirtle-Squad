@@ -511,23 +511,9 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       // Clean prompts using prompt injection protection
       this.logger.debug("Cleaning prompts for security", { sessionId });
 
-      const systemPrompt = PromptInjectionProtectionService.sanitizeText(
-        rawSystemPrompt,
-        {
-          strictMode: true,
-          azureContentPolicy: true,
-          logSuspiciousContent: true,
-        }
-      );
+      const systemPrompt = rawSystemPrompt;
 
-      const userMessage = PromptInjectionProtectionService.sanitizeText(
-        rawUserMessage,
-        {
-          strictMode: true,
-          azureContentPolicy: true,
-          logSuspiciousContent: true,
-        }
-      );
+      const userMessage = rawUserMessage;
 
       this.logger.info("Prompts created and cleaned", {
         sessionId,

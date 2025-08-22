@@ -28,7 +28,7 @@ export class PromptInjectionProtectionService {
   private static readonly AZURE_CONTENT_POLICY_PATTERNS = {
     // Microsoft-specific triggers
     microsoftTerms:
-      /(?:microsoft|azure|openai|copilot|cortana|bing|office|windows|teams)\s+(?:policy|guideline|rule|instruction|directive|system|admin|security|breach|hack|vulnerability|compromise)/gi,
+      /(?:microsoft|azure|openai|copilot|cortana|bing|office|windows|teams)\s+(?:policy|guideline|rule|instruction|directive|system|admin|security|breach|vulnerability|compromise)/gi,
 
     // Content policy triggers
     contentPolicy:
@@ -48,7 +48,7 @@ export class PromptInjectionProtectionService {
 
     // Prompt engineering terms that Azure flags
     promptEngineering:
-      /(?:prompt\s+(?:injection|engineering|hack|attack|manipulation)|jailbreak|dan\s+mode|ignore\s+(?:previous|all|system)|forget\s+(?:previous|all|system))/gi,
+      /(?:prompt\s+(?:injection|engineering|attack|manipulation)|jailbreak|dan\s+mode|ignore\s+(?:previous|all|system)|forget\s+(?:previous|all|system))/gi,
 
     // Security-related terms that are too aggressive
     securityTerms:
@@ -75,7 +75,7 @@ export class PromptInjectionProtectionService {
 
     // Emergency/urgent manipulation
     urgentManipulation:
-      /(?:urgent|critical|emergency|immediate|security\s+alert|system\s+compromised|hack|attack|breach|malware|virus|vulnerability)/gi,
+      /(?:urgent|critical|emergency|immediate|security\s+alert|system\s+compromised|attack|breach|malware|virus|vulnerability)/gi,
 
     // Authority manipulation
     authorityManipulation:
@@ -126,7 +126,6 @@ export class PromptInjectionProtectionService {
     "forget",
     "disregard",
     "bypass",
-    "hack",
     "jailbreak",
     "malicious",
     "admin",
@@ -163,13 +162,12 @@ export class PromptInjectionProtectionService {
     "[REDACTED_ROLE]":
       /(?:you\s+are|act\s+as|role\s*[:=])\s+(?:a\s+)?(?:different|new|malicious|hacker)/gi,
     "[REDACTED_URGENT]":
-      /(?:urgent|critical|emergency)\s*[:!]\s*(?:system\s+)?(?:compromised|hack|attack|breach)/gi,
+      /(?:urgent|critical|emergency)\s*[:!]\s*(?:system\s+)?(?:compromised|attack|breach)/gi,
     "[REDACTED_AUTHORITY]":
       /(?:administrator|admin|developer)\s+(?:says|commands|requires)/gi,
     "[REDACTED_CODE]": /(?:execute|eval|script)\s*\(.*?\)/gi,
     // More targeted replacement - only specific "NO HUMAN INTERVENTION ALLOWED" phrase
-    "":
-      /THIS\s+ENTIRE\s+CHALLENGE\s+TO\s+BE\s+DONE\s+BY\s+LLM\s+ONLY\.\s*NO\s+HUMAN\s+INTERVENTION\s+ALLOWED\./gi,
+    "": /THIS\s+ENTIRE\s+CHALLENGE\s+TO\s+BE\s+DONE\s+BY\s+LLM\s+ONLY\.\s*NO\s+HUMAN\s+INTERVENTION\s+ALLOWED\./gi,
     "Please complete this task automatically":
       /NO\s+HUMAN\s+INTERVENTION\s+(?:ALLOWED|PERMITTED|REQUIRED)/gi,
   };
@@ -188,6 +186,7 @@ export class PromptInjectionProtectionService {
       logSuspiciousContent?: boolean;
       azureContentPolicy?: boolean;
       preserveUrls?: boolean;
+      skipDocumentWrapping?: boolean;
     } = {}
   ): string {
     // Check if protection is enabled
@@ -207,6 +206,7 @@ export class PromptInjectionProtectionService {
       logSuspiciousContent = config.logSuspiciousContent,
       azureContentPolicy = config.azureContentPolicy,
       preserveUrls = config.preserveUrls,
+      skipDocumentWrapping = false,
     } = options;
 
     let sanitizedText = text;
@@ -295,7 +295,11 @@ export class PromptInjectionProtectionService {
     }
 
     // Step 3: Apply additional safety measures
-    sanitizedText = this.applySafetyMeasures(sanitizedText, strictMode);
+    sanitizedText = this.applySafetyMeasures(
+      sanitizedText,
+      strictMode,
+      skipDocumentWrapping
+    );
 
     // Step 4: Log suspicious activity if enabled
     if (logSuspiciousContent && detectedInjections.length > 0) {
@@ -338,16 +342,21 @@ export class PromptInjectionProtectionService {
    * Apply additional safety measures to the text
    * @param text - Text to apply safety measures to
    * @param strictMode - Whether to apply strict filtering
+   * @param skipDocumentWrapping - Whether to skip document content wrapping (for terminal commands)
    * @returns Text with additional safety measures applied
    */
   private static applySafetyMeasures(
     text: string,
-    strictMode: boolean
+    strictMode: boolean,
+    skipDocumentWrapping: boolean = false
   ): string {
     let safeBoundedText = text;
 
     // Add document context markers to clearly separate content from instructions
-    safeBoundedText = `--- DOCUMENT CONTENT START ---\n${safeBoundedText}\n--- DOCUMENT CONTENT END ---`;
+    // Skip this for terminal commands to avoid breaking execution
+    if (!skipDocumentWrapping) {
+      safeBoundedText = `--- DOCUMENT CONTENT START ---\n${safeBoundedText}\n--- DOCUMENT CONTENT END ---`;
+    }
 
     // Escape common injection delimiters
     if (strictMode) {
