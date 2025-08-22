@@ -408,7 +408,7 @@ For each question that involves interacting with the website, use the web_automa
         );
 
         const llmProcessingTime = Date.now() - llmStartTime;
-        
+
         // Console log the response from LLM
         console.log("\n🤖 [HackRX] RECEIVED FROM LLM:");
         console.log("=".repeat(80));

@@ -35,12 +35,54 @@ export class PlaywrightService {
     });
   }
 
+  /**
+   * Initialize the Playwright service during server startup
+   * This preloads the browser and context for faster subsequent operations
+   */
+  public async initializeOnStartup(): Promise<void> {
+    this.logger.info(
+      "Starting Playwright service initialization on server startup"
+    );
+
+    try {
+      const startTime = Date.now();
+      await this.initializeBrowser();
+      const initTime = Date.now() - startTime;
+
+      this.logger.info(
+        "Playwright service successfully initialized on startup",
+        {
+          initializationTimeMs: initTime,
+          browserReady: !!this.browser,
+          contextReady: !!this.context,
+        }
+      );
+
+      console.log(
+        `✅ Playwright browser initialized and ready (${initTime}ms)`
+      );
+    } catch (error: any) {
+      this.logger.error("Failed to initialize Playwright service on startup", {
+        error: error.message,
+        stack: error.stack,
+      });
+
+      console.error(
+        "❌ Failed to initialize Playwright browser:",
+        error.message
+      );
+
+      // Don't throw the error to prevent server startup failure
+      // The service will still work, it will just initialize lazily when first used
+    }
+  }
+
   private async initializeBrowser(): Promise<void> {
     if (!this.browser) {
       this.logger.info("Launching Chromium browser", {
         headless: this.config.headless,
         args: [
-          "--no-sandbox", 
+          "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage", // Overcome limited resource problems
           "--disable-extensions", // Disable extensions for speed
@@ -57,13 +99,13 @@ export class PlaywrightService {
       this.browser = await chromium.launch({
         headless: this.config.headless,
         args: [
-          "--no-sandbox", 
+          "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-extensions",
           "--disable-gpu",
           "--disable-background-timer-throttling",
-          "--disable-renderer-backgrounding", 
+          "--disable-renderer-backgrounding",
           "--disable-backgrounding-occluded-windows",
           "--no-first-run",
           "--disable-default-apps",
@@ -91,13 +133,13 @@ export class PlaywrightService {
         // Performance optimizations
         ignoreHTTPSErrors: true, // Ignore SSL errors for faster loading
         extraHTTPHeaders: {
-          'Accept-Language': 'en-US,en;q=0.9', // Set language
+          "Accept-Language": "en-US,en;q=0.9", // Set language
         },
         // Disable unnecessary features for speed
         javaScriptEnabled: true, // Keep JS enabled since we need it
         bypassCSP: true, // Bypass content security policy
       });
-      
+
       // Set faster timeout defaults for the context
       this.context.setDefaultTimeout(this.config.defaultTimeout);
       this.context.setDefaultNavigationTimeout(this.config.defaultTimeout);
@@ -148,36 +190,46 @@ export class PlaywrightService {
             `Waiting for clickable element: ${action.selector}`,
             { actionId }
           );
-          
+
           try {
             // Use shorter timeout for better responsiveness
-            await page.waitForSelector(action.selector, { 
+            await page.waitForSelector(action.selector, {
               timeout: Math.min(timeout, 10000), // Max 10 seconds
-              state: 'visible' 
+              state: "visible",
             });
-            
+
             this.logger.info(`Clicking element: ${action.selector}`, {
               actionId,
             });
-            await page.click(action.selector, { timeout: 5000, ...action.options });
+            await page.click(action.selector, {
+              timeout: 5000,
+              ...action.options,
+            });
             this.logger.info(`Click completed on: ${action.selector}`, {
               actionId,
             });
           } catch (clickError: any) {
             this.logger.warn(`Click failed, trying alternative approach`, {
               actionId,
-              error: clickError?.message || 'Unknown error',
+              error: clickError?.message || "Unknown error",
             });
-            
+
             // Alternative: Try to click using locator
             try {
               const locator = page.locator(action.selector);
               await locator.click({ timeout: 5000 });
-              this.logger.info(`Click completed with locator: ${action.selector}`, {
-                actionId,
-              });
+              this.logger.info(
+                `Click completed with locator: ${action.selector}`,
+                {
+                  actionId,
+                }
+              );
             } catch (locatorError: any) {
-              throw new Error(`Could not click element ${action.selector}: ${clickError?.message || 'Unknown error'}`);
+              throw new Error(
+                `Could not click element ${action.selector}: ${
+                  clickError?.message || "Unknown error"
+                }`
+              );
             }
           }
           break;
@@ -192,34 +244,36 @@ export class PlaywrightService {
               action.text.substring(0, 50) +
               (action.text.length > 50 ? "..." : ""),
           });
-          
+
           // Try multiple strategies to find and fill the input
           try {
             // Strategy 1: Wait for selector with shorter timeout and retry
-            this.logger.info(`Waiting for input element: ${action.selector}`, { actionId });
-            await page.waitForSelector(action.selector, { 
-              timeout: Math.min(timeout, 10000), // Max 10 seconds
-              state: 'visible' 
+            this.logger.info(`Waiting for input element: ${action.selector}`, {
+              actionId,
             });
-            
+            await page.waitForSelector(action.selector, {
+              timeout: Math.min(timeout, 10000), // Max 10 seconds
+              state: "visible",
+            });
+
             // Clear and fill the input
-            await page.fill(action.selector, ''); // Clear first
+            await page.fill(action.selector, ""); // Clear first
             await page.fill(action.selector, action.text);
-            
+
             this.logger.info(`Text input completed for: ${action.selector}`, {
               actionId,
             });
           } catch (initialError: any) {
             this.logger.warn(`Initial strategy failed, trying alternatives`, {
               actionId,
-              error: initialError?.message || 'Unknown error',
+              error: initialError?.message || "Unknown error",
             });
-            
+
             // Strategy 2: Try common input selectors if the specific one fails
             const fallbackSelectors = [
               action.selector,
               'input[type="text"]',
-              'input[type="email"]', 
+              'input[type="email"]',
               'input[type="search"]',
               'input[name*="search"]',
               'input[placeholder*="search"]',
@@ -227,54 +281,66 @@ export class PlaywrightService {
               'input[class*="input"]',
               '[role="searchbox"]',
               'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
-              'textarea',
-              '[contenteditable="true"]'
+              "textarea",
+              '[contenteditable="true"]',
             ];
-            
+
             let success = false;
             for (const selector of fallbackSelectors) {
               try {
                 const elements = await page.$$(selector);
                 if (elements.length > 0) {
-                  this.logger.info(`Trying fallback selector: ${selector}`, { actionId });
-                  await page.fill(selector, ''); // Clear first
+                  this.logger.info(`Trying fallback selector: ${selector}`, {
+                    actionId,
+                  });
+                  await page.fill(selector, ""); // Clear first
                   await page.fill(selector, action.text);
                   success = true;
-                  this.logger.info(`Text input completed with fallback: ${selector}`, { actionId });
+                  this.logger.info(
+                    `Text input completed with fallback: ${selector}`,
+                    { actionId }
+                  );
                   break;
                 }
               } catch (fallbackError: any) {
                 this.logger.debug(`Fallback selector failed: ${selector}`, {
                   actionId,
-                  error: fallbackError?.message || 'Unknown error',
+                  error: fallbackError?.message || "Unknown error",
                 });
                 continue;
               }
             }
-            
+
             if (!success) {
               // Log available input elements for debugging
               try {
-                const availableInputs = await page.$$eval('input, textarea', elements => 
-                  elements.map(el => ({
-                    tagName: el.tagName.toLowerCase(),
-                    type: el.type || 'text',
-                    id: el.id || null,
-                    name: el.name || null,
-                    className: el.className || null,
-                    placeholder: el.placeholder || null
-                  }))
+                const availableInputs = await page.$$eval(
+                  "input, textarea",
+                  (elements) =>
+                    elements.map((el) => ({
+                      tagName: el.tagName.toLowerCase(),
+                      type: el.type || "text",
+                      id: el.id || null,
+                      name: el.name || null,
+                      className: el.className || null,
+                      placeholder: el.placeholder || null,
+                    }))
                 );
-                
+
                 this.logger.warn(`Available input elements on page:`, {
                   actionId,
                   availableInputs: availableInputs.slice(0, 10), // Limit to first 10
                 });
               } catch (debugError) {
-                this.logger.debug('Could not get available inputs for debugging', { actionId });
+                this.logger.debug(
+                  "Could not get available inputs for debugging",
+                  { actionId }
+                );
               }
-              
-              throw new Error(`Could not find any input element for selector: ${action.selector}`);
+
+              throw new Error(
+                `Could not find any input element for selector: ${action.selector}`
+              );
             }
           }
           break;
@@ -512,18 +578,22 @@ export class PlaywrightService {
     // Set optimized timeouts for faster operations
     page.setDefaultTimeout(this.config.defaultTimeout);
     page.setDefaultNavigationTimeout(this.config.defaultTimeout);
-    
+
     // Set up page performance optimizations
-    await page.route('**/*', route => {
+    await page.route("**/*", (route) => {
       const resourceType = route.request().resourceType();
       const url = route.request().url();
-      
+
       // Block unnecessary resources for faster loading, but allow essential ones
-      if (['image', 'font'].includes(resourceType)) {
+      if (["image", "font"].includes(resourceType)) {
         route.abort();
-      } else if (resourceType === 'stylesheet') {
+      } else if (resourceType === "stylesheet") {
         // Allow critical CSS but block non-essential styling
-        if (url.includes('bootstrap') || url.includes('cdn') || url.includes('googleapis')) {
+        if (
+          url.includes("bootstrap") ||
+          url.includes("cdn") ||
+          url.includes("googleapis")
+        ) {
           route.abort();
         } else {
           route.continue();
@@ -743,19 +813,39 @@ export class PlaywrightService {
 
             // Check if enhanced extraction is requested
             if (request.options?.useEnhancedExtraction) {
-              this.logger.info("Using enhanced content extraction", { sessionId });
+              this.logger.info("Using enhanced content extraction", {
+                sessionId,
+              });
 
               console.log("\n🎭 [Playwright] ENHANCED EXTRACTION REQUESTED:");
               console.log("=".repeat(60));
-              console.log("🔧 OPTIONS:", JSON.stringify(request.options.enhancedExtractionOptions, null, 2));
+              console.log(
+                "🔧 OPTIONS:",
+                JSON.stringify(
+                  request.options.enhancedExtractionOptions,
+                  null,
+                  2
+                )
+              );
               console.log("=".repeat(60));
 
-              const enhancedContent = await this.extractEnhancedPageContent(page, {
-                includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
-                htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
-                includeInteractiveElements: request.options.enhancedExtractionOptions?.includeInteractiveElements ?? true,
-                maxContentSize: request.options.enhancedExtractionOptions?.maxContentSize ?? 50000,
-              });
+              const enhancedContent = await this.extractEnhancedPageContent(
+                page,
+                {
+                  includeHTML:
+                    request.options.enhancedExtractionOptions?.includeHTML ??
+                    true,
+                  htmlCleaningOptions:
+                    request.options.enhancedExtractionOptions
+                      ?.htmlCleaningOptions,
+                  includeInteractiveElements:
+                    request.options.enhancedExtractionOptions
+                      ?.includeInteractiveElements ?? true,
+                  maxContentSize:
+                    request.options.enhancedExtractionOptions?.maxContentSize ??
+                    50000,
+                }
+              );
 
               result.pageContent = JSON.stringify(enhancedContent, null, 2);
 
@@ -765,11 +855,23 @@ export class PlaywrightService {
               console.log("📝 Text Length:", enhancedContent.text.length);
               console.log("🌐 HTML Included:", !!enhancedContent.html);
               console.log("📏 HTML Size:", enhancedContent.html?.length || 0);
-              console.log("📊 Metadata:", JSON.stringify(enhancedContent.metadata, null, 2));
+              console.log(
+                "📊 Metadata:",
+                JSON.stringify(enhancedContent.metadata, null, 2)
+              );
               if (enhancedContent.interactiveElements) {
-                console.log("🔘 Forms:", enhancedContent.interactiveElements.forms.length);
-                console.log("🔲 Buttons:", enhancedContent.interactiveElements.buttons.length);
-                console.log("🔗 Links:", enhancedContent.interactiveElements.links.length);
+                console.log(
+                  "🔘 Forms:",
+                  enhancedContent.interactiveElements.forms.length
+                );
+                console.log(
+                  "🔲 Buttons:",
+                  enhancedContent.interactiveElements.buttons.length
+                );
+                console.log(
+                  "🔗 Links:",
+                  enhancedContent.interactiveElements.links.length
+                );
               }
               console.log("=".repeat(60));
 
@@ -779,11 +881,14 @@ export class PlaywrightService {
                 textLength: enhancedContent.text.length,
                 htmlIncluded: !!enhancedContent.html,
                 htmlSize: enhancedContent.html?.length || 0,
-                formsCount: enhancedContent.interactiveElements?.forms.length || 0,
-                buttonsCount: enhancedContent.interactiveElements?.buttons.length || 0,
-                linksCount: enhancedContent.interactiveElements?.links.length || 0,
-                compressionRatio: enhancedContent.metadata.compressionRatio 
-                  ? Math.round(enhancedContent.metadata.compressionRatio * 100) 
+                formsCount:
+                  enhancedContent.interactiveElements?.forms.length || 0,
+                buttonsCount:
+                  enhancedContent.interactiveElements?.buttons.length || 0,
+                linksCount:
+                  enhancedContent.interactiveElements?.links.length || 0,
+                compressionRatio: enhancedContent.metadata.compressionRatio
+                  ? Math.round(enhancedContent.metadata.compressionRatio * 100)
                   : 0,
               });
             } else {
@@ -935,16 +1040,16 @@ export class PlaywrightService {
             this.logger.info(`Navigating to initial URL: ${request.url}`, {
               sessionId: actualSessionId,
             });
-            
+
             // Use faster loading strategy - only wait for DOM content
             await page.goto(request.url, {
               waitUntil: "domcontentloaded", // Don't wait for all resources
               timeout: Math.min(timeout, 15000), // Max 15 seconds for navigation
             });
-            
+
             // Small wait for critical elements to appear
             await page.waitForTimeout(500);
-            
+
             this.logger.info(`Navigation completed: ${page.url()}`, {
               sessionId: actualSessionId,
             });
@@ -1036,35 +1141,69 @@ export class PlaywrightService {
 
             // Check if enhanced extraction is requested
             if (request.options?.useEnhancedExtraction) {
-              this.logger.info("Using enhanced content extraction", { 
-                sessionId: actualSessionId 
+              this.logger.info("Using enhanced content extraction", {
+                sessionId: actualSessionId,
               });
 
-              console.log("\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION REQUESTED:");
+              console.log(
+                "\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION REQUESTED:"
+              );
               console.log("=".repeat(60));
-              console.log("🔧 OPTIONS:", JSON.stringify(request.options.enhancedExtractionOptions, null, 2));
+              console.log(
+                "🔧 OPTIONS:",
+                JSON.stringify(
+                  request.options.enhancedExtractionOptions,
+                  null,
+                  2
+                )
+              );
               console.log("=".repeat(60));
 
-              const enhancedContent = await this.extractEnhancedPageContent(page, {
-                includeHTML: request.options.enhancedExtractionOptions?.includeHTML ?? true,
-                htmlCleaningOptions: request.options.enhancedExtractionOptions?.htmlCleaningOptions,
-                includeInteractiveElements: request.options.enhancedExtractionOptions?.includeInteractiveElements ?? true,
-                maxContentSize: request.options.enhancedExtractionOptions?.maxContentSize ?? 50000,
-              });
+              const enhancedContent = await this.extractEnhancedPageContent(
+                page,
+                {
+                  includeHTML:
+                    request.options.enhancedExtractionOptions?.includeHTML ??
+                    true,
+                  htmlCleaningOptions:
+                    request.options.enhancedExtractionOptions
+                      ?.htmlCleaningOptions,
+                  includeInteractiveElements:
+                    request.options.enhancedExtractionOptions
+                      ?.includeInteractiveElements ?? true,
+                  maxContentSize:
+                    request.options.enhancedExtractionOptions?.maxContentSize ??
+                    50000,
+                }
+              );
 
               result.pageContent = JSON.stringify(enhancedContent, null, 2);
 
-              console.log("\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION RESULT:");
+              console.log(
+                "\n🎭 [Playwright-Persistent] ENHANCED EXTRACTION RESULT:"
+              );
               console.log("=".repeat(60));
               console.log("📄 Title Length:", enhancedContent.title.length);
               console.log("📝 Text Length:", enhancedContent.text.length);
               console.log("🌐 HTML Included:", !!enhancedContent.html);
               console.log("📏 HTML Size:", enhancedContent.html?.length || 0);
-              console.log("📊 Metadata:", JSON.stringify(enhancedContent.metadata, null, 2));
+              console.log(
+                "📊 Metadata:",
+                JSON.stringify(enhancedContent.metadata, null, 2)
+              );
               if (enhancedContent.interactiveElements) {
-                console.log("🔘 Forms:", enhancedContent.interactiveElements.forms.length);
-                console.log("🔲 Buttons:", enhancedContent.interactiveElements.buttons.length);
-                console.log("🔗 Links:", enhancedContent.interactiveElements.links.length);
+                console.log(
+                  "🔘 Forms:",
+                  enhancedContent.interactiveElements.forms.length
+                );
+                console.log(
+                  "🔲 Buttons:",
+                  enhancedContent.interactiveElements.buttons.length
+                );
+                console.log(
+                  "🔗 Links:",
+                  enhancedContent.interactiveElements.links.length
+                );
               }
               console.log("=".repeat(60));
 
@@ -1074,11 +1213,14 @@ export class PlaywrightService {
                 textLength: enhancedContent.text.length,
                 htmlIncluded: !!enhancedContent.html,
                 htmlSize: enhancedContent.html?.length || 0,
-                formsCount: enhancedContent.interactiveElements?.forms.length || 0,
-                buttonsCount: enhancedContent.interactiveElements?.buttons.length || 0,
-                linksCount: enhancedContent.interactiveElements?.links.length || 0,
-                compressionRatio: enhancedContent.metadata.compressionRatio 
-                  ? Math.round(enhancedContent.metadata.compressionRatio * 100) 
+                formsCount:
+                  enhancedContent.interactiveElements?.forms.length || 0,
+                buttonsCount:
+                  enhancedContent.interactiveElements?.buttons.length || 0,
+                linksCount:
+                  enhancedContent.interactiveElements?.links.length || 0,
+                compressionRatio: enhancedContent.metadata.compressionRatio
+                  ? Math.round(enhancedContent.metadata.compressionRatio * 100)
                   : 0,
               });
             } else {
@@ -1245,7 +1387,7 @@ export class PlaywrightService {
       try {
         this.logger.debug("Extracting full HTML content");
         const fullHTML = await page.content();
-        
+
         if (fullHTML) {
           const cleaningResult = htmlCleaningService.cleanHTML(fullHTML, {
             includeImportantJS: true,
@@ -1271,10 +1413,11 @@ export class PlaywrightService {
               ...htmlCleaningOptions,
             });
 
-            result.html = aggressiveResult.html.length <= maxContentSize 
-              ? aggressiveResult.html 
-              : aggressiveResult.html;
-            
+            result.html =
+              aggressiveResult.html.length <= maxContentSize
+                ? aggressiveResult.html
+                : aggressiveResult.html;
+
             this.logger.warn("HTML was too large, used aggressive cleaning", {
               originalSize: cleaningResult.html.length,
               aggressiveSize: aggressiveResult.html.length,
@@ -1286,13 +1429,16 @@ export class PlaywrightService {
             originalHTMLSize: cleaningResult.metadata.originalSize,
             cleanedHTMLSize: cleaningResult.metadata.cleanedSize,
             compressionRatio: cleaningResult.metadata.compressionRatio,
-            importantScriptsFound: cleaningResult.metadata.importantScriptsFound,
+            importantScriptsFound:
+              cleaningResult.metadata.importantScriptsFound,
           };
 
           this.logger.info("HTML cleaning completed", {
             originalSize: cleaningResult.metadata.originalSize,
             cleanedSize: cleaningResult.metadata.cleanedSize,
-            compressionRatio: Math.round(cleaningResult.metadata.compressionRatio * 100),
+            compressionRatio: Math.round(
+              cleaningResult.metadata.compressionRatio * 100
+            ),
             importantScripts: cleaningResult.metadata.importantScriptsFound,
           });
         }
@@ -1314,7 +1460,9 @@ export class PlaywrightService {
             id: form.id || undefined,
             action: form.action || undefined,
             method: form.method || undefined,
-            inputs: Array.from(form.querySelectorAll("input, select, textarea")).map((input: any) => ({
+            inputs: Array.from(
+              form.querySelectorAll("input, select, textarea")
+            ).map((input: any) => ({
               type: input.type || input.tagName.toLowerCase(),
               name: input.name || undefined,
               id: input.id || undefined,
@@ -1359,7 +1507,9 @@ export class PlaywrightService {
           linksCount: links.length,
         });
       } catch (error) {
-        this.logger.error("Error during interactive elements extraction", { error });
+        this.logger.error("Error during interactive elements extraction", {
+          error,
+        });
         result.interactiveElements = undefined;
       }
     }

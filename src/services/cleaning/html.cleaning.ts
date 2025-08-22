@@ -48,51 +48,51 @@ export class HTMLCleaningService {
     /\$\.get\s*\(/gi,
     /\$\.post\s*\(/gi,
     /\$\.ajax\s*\(/gi,
-    
+
     // WebSocket and real-time communication
     /WebSocket/gi,
     /socket\.io/gi,
     /EventSource/gi,
-    
+
     // Form handling and data submission
     /FormData/gi,
     /\.submit\s*\(/gi,
     /\.serialize\s*\(/gi,
-    
+
     // Authentication and tokens
     /token/gi,
     /auth/gi,
     /login/gi,
     /session/gi,
     /csrf/gi,
-    
+
     // Local/Session storage operations
     /localStorage/gi,
     /sessionStorage/gi,
     /cookies/gi,
-    
+
     // Dynamic content loading
     /\.load\s*\(/gi,
     /\.html\s*\(/gi,
     /innerHTML/gi,
     /appendChild/gi,
     /createElement/gi,
-    
+
     // Event handling that might be important
     /addEventListener/gi,
     /onClick/gi,
     /onSubmit/gi,
     /onChange/gi,
-    
+
     // JSON operations
     /JSON\.parse/gi,
     /JSON\.stringify/gi,
-    
+
     // Navigation and routing
     /window\.location/gi,
     /history\.push/gi,
     /router\./gi,
-    
+
     // Error handling
     /catch\s*\(/gi,
     /throw\s+/gi,
@@ -110,39 +110,39 @@ export class HTMLCleaningService {
     /tracking/gi,
     /mixpanel/gi,
     /segment\./gi,
-    
+
     // Advertising
     /googletag/gi,
     /doubleclick/gi,
     /adsystem/gi,
     /amazon-adsystem/gi,
-    
+
     // Social media widgets
     /facebook\.net/gi,
     /connect\.facebook/gi,
     /twitter\.com\/widgets/gi,
     /platform\.linkedin/gi,
-    
+
     // Chat widgets and support
     /zendesk/gi,
     /intercom/gi,
     /drift/gi,
     /crisp/gi,
-    
+
     // CDN and library loaders (usually not business logic)
     /cdn\.jsdelivr/gi,
     /unpkg\.com/gi,
     /cdnjs\.cloudflare/gi,
-    
+
     // Performance monitoring
     /newrelic/gi,
     /sentry/gi,
     /bugsnag/gi,
-    
+
     // A/B testing
     /optimizely/gi,
     /vwo\.com/gi,
-    
+
     // Comment systems
     /disqus/gi,
     /livefyre/gi,
@@ -150,17 +150,53 @@ export class HTMLCleaningService {
 
   // HTML elements to preserve with all attributes
   private static readonly IMPORTANT_ELEMENTS = [
-    'form', 'input', 'button', 'select', 'textarea', 'label',
-    'a', 'nav', 'header', 'main', 'section', 'article',
-    'div', 'span', 'table', 'tr', 'td', 'th', 'tbody', 'thead',
-    'ul', 'ol', 'li', 'dl', 'dt', 'dd'
+    "form",
+    "input",
+    "button",
+    "select",
+    "textarea",
+    "label",
+    "a",
+    "nav",
+    "header",
+    "main",
+    "section",
+    "article",
+    "div",
+    "span",
+    "table",
+    "tr",
+    "td",
+    "th",
+    "tbody",
+    "thead",
+    "ul",
+    "ol",
+    "li",
+    "dl",
+    "dt",
+    "dd",
   ];
 
   // Attributes to always preserve
   private static readonly IMPORTANT_ATTRIBUTES = [
-    'id', 'class', 'name', 'type', 'value', 'href', 'src',
-    'action', 'method', 'for', 'placeholder', 'title',
-    'role', 'tabindex', 'disabled', 'required', 'readonly'
+    "id",
+    "class",
+    "name",
+    "type",
+    "value",
+    "href",
+    "src",
+    "action",
+    "method",
+    "for",
+    "placeholder",
+    "title",
+    "role",
+    "tabindex",
+    "disabled",
+    "required",
+    "readonly",
   ];
 
   constructor() {
@@ -217,8 +253,10 @@ export class HTMLCleaningService {
     console.log("📜 Important Scripts Found:", scriptAnalysis.important.length);
     console.log("🗑️ Filtered Scripts:", scriptAnalysis.filtered.length);
     if (scriptAnalysis.important.length > 0 && scriptAnalysis.important[0]) {
-      console.log("✅ Important Script Preview:", 
-        scriptAnalysis.important[0].substring(0, 100) + "...");
+      console.log(
+        "✅ Important Script Preview:",
+        scriptAnalysis.important[0].substring(0, 100) + "..."
+      );
     }
     console.log("-".repeat(40));
 
@@ -240,14 +278,18 @@ export class HTMLCleaningService {
 
     // Re-inject important scripts if any
     if (includeImportantJS && scriptAnalysis.important.length > 0) {
-      cleanedHTML = this.injectImportantScripts(cleanedHTML, scriptAnalysis.important);
+      cleanedHTML = this.injectImportantScripts(
+        cleanedHTML,
+        scriptAnalysis.important
+      );
     }
 
     // Final cleanup
     cleanedHTML = this.finalCleanup(cleanedHTML);
 
     const cleanedSize = cleanedHTML.length;
-    const compressionRatio = originalSize > 0 ? (originalSize - cleanedSize) / originalSize : 0;
+    const compressionRatio =
+      originalSize > 0 ? (originalSize - cleanedSize) / originalSize : 0;
 
     const result: CleanedHTMLResult = {
       html: cleanedHTML,
@@ -256,7 +298,8 @@ export class HTMLCleaningService {
         originalSize,
         cleanedSize,
         compressionRatio,
-        scriptsProcessed: scriptAnalysis.important.length + scriptAnalysis.filtered.length,
+        scriptsProcessed:
+          scriptAnalysis.important.length + scriptAnalysis.filtered.length,
         importantScriptsFound: scriptAnalysis.important.length,
       },
     };
@@ -273,10 +316,16 @@ export class HTMLCleaningService {
     console.log("=".repeat(60));
     console.log("📏 Original Size:", originalSize, "characters");
     console.log("📏 Cleaned Size:", cleanedSize, "characters");
-    console.log("📊 Compression Ratio:", Math.round(compressionRatio * 100) + "%");
-    console.log("📜 Important Scripts Included:", scriptAnalysis.important.length);
+    console.log(
+      "📊 Compression Ratio:",
+      Math.round(compressionRatio * 100) + "%"
+    );
+    console.log(
+      "📜 Important Scripts Included:",
+      scriptAnalysis.important.length
+    );
     console.log("🗑️ Scripts Filtered Out:", scriptAnalysis.filtered.length);
-    console.log("💾 Size Reduction:", (originalSize - cleanedSize), "characters");
+    console.log("💾 Size Reduction:", originalSize - cleanedSize, "characters");
     console.log("=".repeat(60));
 
     return result;
@@ -302,8 +351,8 @@ export class HTMLCleaningService {
     let match;
 
     while ((match = scriptRegex.exec(html)) !== null) {
-      const scriptContent = match[1]?.trim() || '';
-      
+      const scriptContent = match[1]?.trim() || "";
+
       // Skip empty scripts
       if (!scriptContent || scriptContent.length === 0) {
         continue;
@@ -311,13 +360,15 @@ export class HTMLCleaningService {
 
       // Skip if too large
       if (scriptContent.length > maxScriptSize) {
-        filtered.push(`[FILTERED: Script too large (${scriptContent.length} chars)]`);
+        filtered.push(
+          `[FILTERED: Script too large (${scriptContent.length} chars)]`
+        );
         continue;
       }
 
       // Check if script is unimportant first (these take priority)
       const isUnimportant = HTMLCleaningService.UNIMPORTANT_JS_PATTERNS.some(
-        pattern => pattern.test(scriptContent)
+        (pattern) => pattern.test(scriptContent)
       );
 
       if (isUnimportant) {
@@ -327,7 +378,7 @@ export class HTMLCleaningService {
 
       // Check if script contains important patterns
       const isImportant = HTMLCleaningService.IMPORTANT_JS_PATTERNS.some(
-        pattern => pattern.test(scriptContent)
+        (pattern) => pattern.test(scriptContent)
       );
 
       if (isImportant) {
@@ -346,33 +397,37 @@ export class HTMLCleaningService {
    * Clean individual script content
    */
   private cleanScriptContent(script: string): string {
-    return script
-      // Remove comments
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/\/\/.*$/gm, '')
-      // Remove console.log statements
-      .replace(/console\.(log|debug|info|warn)\s*\([^)]*\);?/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim();
+    return (
+      script
+        // Remove comments
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "")
+        // Remove console.log statements
+        .replace(/console\.(log|debug|info|warn)\s*\([^)]*\);?/g, "")
+        // Normalize whitespace
+        .replace(/\s+/g, " ")
+        .trim()
+    );
   }
 
   /**
    * Remove all script tags from HTML
    */
   private removeScriptTags(html: string): string {
-    return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "");
   }
 
   /**
    * Remove CSS from HTML
    */
   private removeCSS(html: string): string {
-    return html
-      // Remove style tags
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      // Remove style attributes (but preserve others)
-      .replace(/\s+style\s*=\s*["'][^"']*["']/gi, '');
+    return (
+      html
+        // Remove style tags
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        // Remove style attributes (but preserve others)
+        .replace(/\s+style\s*=\s*["'][^"']*["']/gi, "")
+    );
   }
 
   /**
@@ -390,22 +445,22 @@ export class HTMLCleaningService {
     let cleaned = html;
 
     // Remove comments
-    cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+    cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, "");
 
     // Clean up attributes while preserving important ones
     if (!includeEventHandlers) {
       // Remove inline event handlers
-      cleaned = cleaned.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+      cleaned = cleaned.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, "");
     }
 
     if (!includeDataAttributes) {
       // Remove data attributes
-      cleaned = cleaned.replace(/\s+data-[\w-]+\s*=\s*["'][^"']*["']/gi, '');
+      cleaned = cleaned.replace(/\s+data-[\w-]+\s*=\s*["'][^"']*["']/gi, "");
     }
 
     if (!includeAriaAttributes) {
       // Remove aria attributes
-      cleaned = cleaned.replace(/\s+aria-[\w-]+\s*=\s*["'][^"']*["']/gi, '');
+      cleaned = cleaned.replace(/\s+aria-[\w-]+\s*=\s*["'][^"']*["']/gi, "");
     }
 
     return cleaned;
@@ -414,20 +469,23 @@ export class HTMLCleaningService {
   /**
    * Inject important scripts back into the cleaned HTML
    */
-  private injectImportantScripts(html: string, importantScripts: string[]): string {
+  private injectImportantScripts(
+    html: string,
+    importantScripts: string[]
+  ): string {
     if (importantScripts.length === 0) {
       return html;
     }
 
     // Add scripts before closing body tag, or at the end if no body tag
     const scriptsHTML = importantScripts
-      .map(script => `<script type="text/javascript">\n${script}\n</script>`)
-      .join('\n');
+      .map((script) => `<script type="text/javascript">\n${script}\n</script>`)
+      .join("\n");
 
-    if (html.includes('</body>')) {
-      return html.replace('</body>', `${scriptsHTML}\n</body>`);
+    if (html.includes("</body>")) {
+      return html.replace("</body>", `${scriptsHTML}\n</body>`);
     } else {
-      return html + '\n' + scriptsHTML;
+      return html + "\n" + scriptsHTML;
     }
   }
 
@@ -435,13 +493,15 @@ export class HTMLCleaningService {
    * Final cleanup of the HTML
    */
   private finalCleanup(html: string): string {
-    return html
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      // Clean up multiple newlines
-      .replace(/\n\s*\n/g, '\n')
-      // Remove leading/trailing whitespace
-      .trim();
+    return (
+      html
+        // Normalize whitespace
+        .replace(/\s+/g, " ")
+        // Clean up multiple newlines
+        .replace(/\n\s*\n/g, "\n")
+        // Remove leading/trailing whitespace
+        .trim()
+    );
   }
 
   /**
@@ -470,15 +530,22 @@ export class HTMLCleaningService {
     hasInlineCSS: boolean;
     hasExternalCSS: boolean;
   } {
-    const scriptMatches = htmlContent.match(/<script[^>]*>[\s\S]*?<\/script>/gi) || [];
-    const styleMatches = htmlContent.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
-    const linkCSSMatches = htmlContent.match(/<link[^>]*rel\s*=\s*["']stylesheet["'][^>]*>/gi) || [];
+    const scriptMatches =
+      htmlContent.match(/<script[^>]*>[\s\S]*?<\/script>/gi) || [];
+    const styleMatches =
+      htmlContent.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
+    const linkCSSMatches =
+      htmlContent.match(/<link[^>]*rel\s*=\s*["']stylesheet["'][^>]*>/gi) || [];
 
-    const scriptAnalysis = this.extractAndAnalyzeScripts(htmlContent, true, 2000);
+    const scriptAnalysis = this.extractAndAnalyzeScripts(
+      htmlContent,
+      true,
+      2000
+    );
 
     // Estimate size reduction
-    const scriptSize = scriptMatches.join('').length;
-    const styleSize = styleMatches.join('').length;
+    const scriptSize = scriptMatches.join("").length;
+    const styleSize = styleMatches.join("").length;
     const estimatedReduction = scriptSize + styleSize;
 
     return {
