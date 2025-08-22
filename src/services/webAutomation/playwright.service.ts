@@ -8,7 +8,6 @@ import type {
 } from "./types";
 import { sentryMonitoringService } from "../monitoring";
 import { loggingService } from "../logging";
-import { contentFlowLogger } from "../logging/contentFlow.logging";
 
 export class PlaywrightService {
   private browser: Browser | null = null;
@@ -40,7 +39,7 @@ export class PlaywrightService {
       this.logger.info("Launching Chromium browser", {
         headless: this.config.headless,
         args: [
-          "--no-sandbox",
+          "--no-sandbox", 
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage", // Overcome limited resource problems
           "--disable-extensions", // Disable extensions for speed
@@ -57,13 +56,13 @@ export class PlaywrightService {
       this.browser = await chromium.launch({
         headless: this.config.headless,
         args: [
-          "--no-sandbox",
+          "--no-sandbox", 
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-extensions",
           "--disable-gpu",
           "--disable-background-timer-throttling",
-          "--disable-renderer-backgrounding",
+          "--disable-renderer-backgrounding", 
           "--disable-backgrounding-occluded-windows",
           "--no-first-run",
           "--disable-default-apps",
@@ -91,13 +90,13 @@ export class PlaywrightService {
         // Performance optimizations
         ignoreHTTPSErrors: true, // Ignore SSL errors for faster loading
         extraHTTPHeaders: {
-          "Accept-Language": "en-US,en;q=0.9", // Set language
+          'Accept-Language': 'en-US,en;q=0.9', // Set language
         },
         // Disable unnecessary features for speed
         javaScriptEnabled: true, // Keep JS enabled since we need it
         bypassCSP: true, // Bypass content security policy
       });
-
+      
       // Set faster timeout defaults for the context
       this.context.setDefaultTimeout(this.config.defaultTimeout);
       this.context.setDefaultNavigationTimeout(this.config.defaultTimeout);
@@ -148,46 +147,36 @@ export class PlaywrightService {
             `Waiting for clickable element: ${action.selector}`,
             { actionId }
           );
-
+          
           try {
             // Use shorter timeout for better responsiveness
-            await page.waitForSelector(action.selector, {
+            await page.waitForSelector(action.selector, { 
               timeout: Math.min(timeout, 10000), // Max 10 seconds
-              state: "visible",
+              state: 'visible' 
             });
-
+            
             this.logger.info(`Clicking element: ${action.selector}`, {
               actionId,
             });
-            await page.click(action.selector, {
-              timeout: 5000,
-              ...action.options,
-            });
+            await page.click(action.selector, { timeout: 5000, ...action.options });
             this.logger.info(`Click completed on: ${action.selector}`, {
               actionId,
             });
           } catch (clickError: any) {
             this.logger.warn(`Click failed, trying alternative approach`, {
               actionId,
-              error: clickError?.message || "Unknown error",
+              error: clickError?.message || 'Unknown error',
             });
-
+            
             // Alternative: Try to click using locator
             try {
               const locator = page.locator(action.selector);
               await locator.click({ timeout: 5000 });
-              this.logger.info(
-                `Click completed with locator: ${action.selector}`,
-                {
-                  actionId,
-                }
-              );
+              this.logger.info(`Click completed with locator: ${action.selector}`, {
+                actionId,
+              });
             } catch (locatorError: any) {
-              throw new Error(
-                `Could not click element ${action.selector}: ${
-                  clickError?.message || "Unknown error"
-                }`
-              );
+              throw new Error(`Could not click element ${action.selector}: ${clickError?.message || 'Unknown error'}`);
             }
           }
           break;
@@ -202,97 +191,90 @@ export class PlaywrightService {
               action.text.substring(0, 50) +
               (action.text.length > 50 ? "..." : ""),
           });
-
-          // Enhanced input finding with multiple selector strategies
-          let success = false;
-          const selectorsToTry = [
-            action.selector, // Primary selector from LLM
-            // Common input selectors
-            'input[type="text"]',
-            'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
-            'input[placeholder*="text"]',
-            'input[placeholder*="hidden"]',
-            'input[placeholder*="enter"]',
-            "textarea",
-            '[contenteditable="true"]',
-          ];
-
-          for (const selector of selectorsToTry) {
-            try {
-              this.logger.info(`Trying selector: ${selector}`, { actionId });
-
-              // Check if elements exist first
-              const elements = await page.$$(selector);
-              if (elements.length === 0) {
-                this.logger.debug(
-                  `No elements found for selector: ${selector}`,
-                  { actionId }
-                );
+          
+          // Try multiple strategies to find and fill the input
+          try {
+            // Strategy 1: Wait for selector with shorter timeout and retry
+            this.logger.info(`Waiting for input element: ${action.selector}`, { actionId });
+            await page.waitForSelector(action.selector, { 
+              timeout: Math.min(timeout, 10000), // Max 10 seconds
+              state: 'visible' 
+            });
+            
+            // Clear and fill the input
+            await page.fill(action.selector, ''); // Clear first
+            await page.fill(action.selector, action.text);
+            
+            this.logger.info(`Text input completed for: ${action.selector}`, {
+              actionId,
+            });
+          } catch (initialError: any) {
+            this.logger.warn(`Initial strategy failed, trying alternatives`, {
+              actionId,
+              error: initialError?.message || 'Unknown error',
+            });
+            
+            // Strategy 2: Try common input selectors if the specific one fails
+            const fallbackSelectors = [
+              action.selector,
+              'input[type="text"]',
+              'input[type="email"]', 
+              'input[type="search"]',
+              'input[name*="search"]',
+              'input[placeholder*="search"]',
+              'input[class*="search"]',
+              'input[class*="input"]',
+              '[role="searchbox"]',
+              'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
+              'textarea',
+              '[contenteditable="true"]'
+            ];
+            
+            let success = false;
+            for (const selector of fallbackSelectors) {
+              try {
+                const elements = await page.$$(selector);
+                if (elements.length > 0) {
+                  this.logger.info(`Trying fallback selector: ${selector}`, { actionId });
+                  await page.fill(selector, ''); // Clear first
+                  await page.fill(selector, action.text);
+                  success = true;
+                  this.logger.info(`Text input completed with fallback: ${selector}`, { actionId });
+                  break;
+                }
+              } catch (fallbackError: any) {
+                this.logger.debug(`Fallback selector failed: ${selector}`, {
+                  actionId,
+                  error: fallbackError?.message || 'Unknown error',
+                });
                 continue;
               }
-
-              this.logger.info(
-                `Found ${elements.length} elements for selector: ${selector}`,
-                { actionId }
-              );
-
-              // Try to fill the first matching element
-              await page.fill(selector, "", { timeout: 5000 }); // Clear first
-              await page.fill(selector, action.text, { timeout: 5000 });
-
-              success = true;
-              this.logger.info(
-                `Text input completed with selector: ${selector}`,
-                {
-                  actionId,
-                }
-              );
-              break;
-            } catch (selectorError: any) {
-              this.logger.debug(`Selector failed: ${selector}`, {
-                actionId,
-                error: selectorError?.message || "Unknown error",
-              });
-              continue;
             }
-          }
-
-          if (!success) {
-            // Enhanced debugging - log all available inputs
-            try {
-              const availableInputs = await page.$$eval(
-                "input, textarea, [contenteditable]",
-                (elements) =>
-                  elements.map((el) => ({
+            
+            if (!success) {
+              // Log available input elements for debugging
+              try {
+                const availableInputs = await page.$$eval('input, textarea', elements => 
+                  elements.map(el => ({
                     tagName: el.tagName.toLowerCase(),
-                    type: (el as any).type || "text",
-                    id: (el as any).id || null,
-                    name: (el as any).name || null,
-                    className: (el as any).className || null,
-                    placeholder: (el as any).placeholder || null,
-                    value: (el as any).value || null,
-                    visible: (el as any).offsetParent !== null,
+                    type: el.type || 'text',
+                    id: el.id || null,
+                    name: el.name || null,
+                    className: el.className || null,
+                    placeholder: el.placeholder || null
                   }))
-              );
-
-              this.logger.error(
-                `No input element could be filled. Available inputs:`,
-                {
+                );
+                
+                this.logger.warn(`Available input elements on page:`, {
                   actionId,
-                  availableInputs,
-                  triedSelectors: selectorsToTry,
-                }
-              );
-            } catch (debugError) {
-              this.logger.debug(
-                "Could not get available inputs for debugging",
-                { actionId }
-              );
+                  availableInputs: availableInputs.slice(0, 10), // Limit to first 10
+                });
+              } catch (debugError) {
+                this.logger.debug('Could not get available inputs for debugging', { actionId });
+              }
+              
+              throw new Error(`Could not find any input element for selector: ${action.selector}`);
             }
-
-            throw new Error(
-              `Could not find any input element for selector: ${action.selector}`
-            );
           }
           break;
 
@@ -328,12 +310,9 @@ export class PlaywrightService {
             });
           } else {
             this.logger.info("Scrolling to bottom of page", { actionId });
-            await page.evaluate(() => {
-              (globalThis as any).window.scrollTo(
-                0,
-                (globalThis as any).document.body.scrollHeight
-              );
-            });
+            await page.evaluate(() =>
+              window.scrollTo(0, document.body.scrollHeight)
+            );
             this.logger.info("Scrolled to bottom of page", { actionId });
           }
           break;
@@ -411,101 +390,64 @@ export class PlaywrightService {
             { actionId }
           );
 
-          // Enhanced intelligent input finding with better selector strategies
-          let found = false;
-          const intelligentSelectors = [
-            action.selector, // Original selector
-            // Try exact attribute matches
-            `[placeholder="${action.selector}"]`,
-            `[placeholder*="${action.selector}"]`,
-            `input[placeholder="${action.selector}"]`,
-            `input[placeholder*="${action.selector}"]`,
-            // Try ID and name matches
-            `#${action.selector}`,
-            `[name="${action.selector}"]`,
-            `input[name="${action.selector}"]`,
-            // Try partial matches
-            `input[name*="${action.selector}"]`,
-            `input[id*="${action.selector}"]`,
-            `textarea[name*="${action.selector}"]`,
-            `textarea[id*="${action.selector}"]`,
-            // Try generic input selectors
-            'input[type="text"]',
-            'input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
-            "textarea",
-          ];
+          // More intelligent input finding
+          try {
+            await page.waitForSelector(action.selector, { timeout });
+            this.logger.info(`Found exact selector: ${action.selector}`, {
+              actionId,
+            });
+          } catch {
+            this.logger.warn(
+              `Exact selector failed, trying fallback methods for: ${action.selector}`,
+              { actionId }
+            );
 
-          for (const selector of intelligentSelectors) {
-            try {
-              this.logger.debug(`Trying intelligent selector: ${selector}`, {
-                actionId,
-              });
+            // If exact selector fails, try common input selectors
+            const commonSelectors = [
+              `input[name*="${action.selector}"]`,
+              `input[id*="${action.selector}"]`,
+              `input[placeholder*="${action.selector}"]`,
+              `textarea[name*="${action.selector}"]`,
+              `textarea[id*="${action.selector}"]`,
+            ];
 
-              // Check if elements exist
-              const elements = await page.$$(selector);
-              if (elements.length === 0) {
+            let found = false;
+            for (const fallbackSelector of commonSelectors) {
+              try {
+                this.logger.debug(
+                  `Trying fallback selector: ${fallbackSelector}`,
+                  { actionId }
+                );
+                await page.waitForSelector(fallbackSelector, { timeout: 2000 });
+                action.selector = fallbackSelector;
+                found = true;
+                this.logger.info(
+                  `Found element with fallback selector: ${fallbackSelector}`,
+                  { actionId }
+                );
+                break;
+              } catch {
                 continue;
               }
+            }
 
-              this.logger.info(
-                `Found ${elements.length} elements with selector: ${selector}`,
-                { actionId }
-              );
-
-              // Try to fill the element
-              await page.fill(selector, action.text, { timeout: 5000 });
-              found = true;
-
-              this.logger.info(
-                `Intelligent fill completed with selector: ${selector}`,
-                { actionId }
-              );
-              break;
-            } catch (error: any) {
-              this.logger.debug(`Intelligent selector failed: ${selector}`, {
+            if (!found) {
+              this.logger.error(`Could not find any matching input element`, {
                 actionId,
-                error: error?.message || "Unknown error",
+                originalSelector: action.selector,
+                triedSelectors: commonSelectors,
               });
-              continue;
+              throw new Error(
+                `Could not find input element matching: ${action.selector}`
+              );
             }
           }
 
-          if (!found) {
-            // Enhanced debugging for find_and_fill
-            try {
-              const availableInputs = await page.$$eval(
-                "input, textarea, [contenteditable]",
-                (elements) =>
-                  elements.map((el) => ({
-                    tagName: el.tagName.toLowerCase(),
-                    type: (el as any).type || "text",
-                    id: (el as any).id || null,
-                    name: (el as any).name || null,
-                    placeholder: (el as any).placeholder || null,
-                    className: (el as any).className || null,
-                  }))
-              );
-
-              this.logger.error(
-                `Intelligent input finding failed. Available inputs:`,
-                {
-                  actionId,
-                  originalSelector: action.selector,
-                  triedSelectors: intelligentSelectors,
-                  availableInputs,
-                }
-              );
-            } catch (debugError) {
-              this.logger.debug(
-                "Could not get available inputs for debugging",
-                { actionId }
-              );
-            }
-
-            throw new Error(
-              `Could not find input element matching: ${action.selector}`
-            );
-          }
+          await page.fill(action.selector, action.text);
+          this.logger.info(
+            `Intelligent fill completed for: ${action.selector}`,
+            { actionId }
+          );
           break;
 
         default:
@@ -569,22 +511,18 @@ export class PlaywrightService {
     // Set optimized timeouts for faster operations
     page.setDefaultTimeout(this.config.defaultTimeout);
     page.setDefaultNavigationTimeout(this.config.defaultTimeout);
-
+    
     // Set up page performance optimizations
-    await page.route("**/*", (route) => {
+    await page.route('**/*', route => {
       const resourceType = route.request().resourceType();
       const url = route.request().url();
-
+      
       // Block unnecessary resources for faster loading, but allow essential ones
-      if (["image", "font"].includes(resourceType)) {
+      if (['image', 'font'].includes(resourceType)) {
         route.abort();
-      } else if (resourceType === "stylesheet") {
+      } else if (resourceType === 'stylesheet') {
         // Allow critical CSS but block non-essential styling
-        if (
-          url.includes("bootstrap") ||
-          url.includes("cdn") ||
-          url.includes("googleapis")
-        ) {
+        if (url.includes('bootstrap') || url.includes('cdn') || url.includes('googleapis')) {
           route.abort();
         } else {
           route.continue();
@@ -802,273 +740,44 @@ export class PlaywrightService {
           if (request.options?.includeContent !== false) {
             this.logger.info("Extracting page content", { sessionId });
 
-            // Get basic page content with JavaScript and unwanted content filtered out
+            // Get basic page content
             const title = await page.title();
+            const textContent = await page.textContent("body");
+            const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
 
-            // Remove only script and style content from text extraction (keep structure intact)
-            const cleanText = await page.evaluate(() => {
-              // Clone the body to avoid modifying the original DOM
-              const bodyClone = (globalThis as any).document.body.cloneNode(
-                true
-              ) as any;
-
-              // Only remove script and style tags that contain code (not interactive elements)
-              const codeSelectors = [
-                "script", // Remove script tags only
-                "style", // Remove style tags only
-                "noscript", // Remove noscript tags
-              ];
-
-              codeSelectors.forEach((selector: string) => {
-                const elements = bodyClone.querySelectorAll(selector);
-                elements.forEach((el: any) => el.remove());
-              });
-
-              // Get clean text content
-              let text = bodyClone.textContent || bodyClone.innerText || "";
-
-              // Remove only non-functional JavaScript patterns, preserve API calls and functional code
-              text = text
-                // Remove analytics and tracking code
-                .replace(/gtag\([^)]*\)/g, "") // Remove Google Analytics
-                .replace(/ga\([^)]*\)/g, "") // Remove Google Analytics
-                .replace(/fbq\([^)]*\)/g, "") // Remove Facebook Pixel
-                .replace(/\_gaq\.push\([^)]*\)/g, "") // Remove Google Analytics queue
-                // Remove console statements (but keep functional code)
-                .replace(/console\.(log|error|warn|info)\([^)]*\)/g, "")
-                // Remove comments but preserve code structure
-                .replace(/\/\*[\s\S]*?\*\//g, "") // Remove block comments
-                .replace(/\/\/(?!.*https?:\/\/).*$/gm, "") // Remove line comments but preserve URLs
-                // Clean up excessive whitespace but preserve code structure
-                .replace(/\s{3,}/g, " ") // Replace 3+ spaces with single space
-                .trim();
-
-              // Extract and preserve important API calls and functional code
-              const apiCallMatches = text.match(
-                /fetch\s*\(\s*["`'][^"`']*["`'][^}]*\}/g
-              );
-              const functionMatches = text.match(
-                /async\s+function[^}]*\}[^}]*\}/g
-              );
-
-              let preservedCode = "";
-              if (apiCallMatches) {
-                preservedCode +=
-                  "\n\nIMPORTANT API CALLS:\n" + apiCallMatches.join("\n");
-              }
-              if (functionMatches) {
-                preservedCode +=
-                  "\n\nFUNCTIONAL CODE:\n" + functionMatches.join("\n");
-              }
-
-              text = text + preservedCode;
-
-              return text;
-            });
-
-            // Get interactive elements (keep all visible elements for automation)
+            // Get interactive elements
             const buttons = await page.$$eval(
               'button, input[type="button"], input[type="submit"]',
               (elements) =>
                 elements
                   .map((el) => el.textContent?.trim() || (el as any).value)
                   .filter(Boolean)
-                  .filter((text) => text.length > 0 && text.length < 200) // Allow longer text for buttons
             );
 
-            const links = await page.$$eval(
-              "a[href]",
-              (elements) =>
-                elements
-                  .map((el) => ({
-                    text: el.textContent?.trim(),
-                    href: (el as any).href,
-                  }))
-                  .filter((l) => l.text && l.text.length > 0)
-                  .filter((l) => !l.href.startsWith("javascript:")) // Only filter out javascript links
+            const links = await page.$$eval("a[href]", (elements) =>
+              elements
+                .map((el) => ({
+                  text: el.textContent?.trim(),
+                  href: (el as any).href,
+                }))
+                .filter((l) => l.text && l.text.length > 0)
             );
-
-            // Get input fields for automation (crucial for typing actions)
-            const inputs = await page.$$eval(
-              'input:not([type="button"]):not([type="submit"]), textarea, select',
-              (elements) =>
-                elements.map((el, index) => {
-                  const element = el as any;
-
-                  // Build possible selectors for this input
-                  const selectors = [];
-
-                  if (element.id) {
-                    selectors.push(`#${element.id}`);
-                  }
-                  if (element.name) {
-                    selectors.push(`[name="${element.name}"]`);
-                  }
-                  if (element.placeholder) {
-                    selectors.push(`[placeholder="${element.placeholder}"]`);
-                  }
-                  if (element.type && element.type !== "text") {
-                    selectors.push(`input[type="${element.type}"]`);
-                  }
-
-                  // Fallback selectors
-                  selectors.push(
-                    `${element.tagName.toLowerCase()}:nth-of-type(${index + 1})`
-                  );
-                  selectors.push(
-                    `${element.tagName.toLowerCase()}:nth-child(${index + 1})`
-                  );
-
-                  return {
-                    type: element.type || "text",
-                    name: element.name || null,
-                    id: element.id || null,
-                    placeholder: element.placeholder || null,
-                    value: element.value || null,
-                    tagName: element.tagName.toLowerCase(),
-                    selectors: selectors, // Provide multiple selector options
-                    index: index, // Add index for fallback
-                  };
-                })
-            );
-
-            // Get elements with data attributes (often used for hidden content or special interactions)
-            const dataElements = await page.$$eval(
-              '[data-secret], [data-hidden], [data-value], [data-answer], [data-key], [style*="display: none"], [style*="visibility: hidden"]',
-              (elements) =>
-                elements
-                  .map((el, index) => {
-                    const element = el as any;
-                    const dataAttrs: Record<string, string> = {};
-
-                    // Collect all data-* attributes
-                    for (const attr of element.attributes) {
-                      if (attr.name.startsWith("data-")) {
-                        dataAttrs[attr.name] = attr.value;
-                      }
-                    }
-
-                    return {
-                      tagName: element.tagName.toLowerCase(),
-                      id: element.id || null,
-                      className: element.className || null,
-                      textContent: (element.textContent || "").trim(),
-                      dataAttributes: dataAttrs,
-                      style: element.style.cssText || null,
-                      isHidden:
-                        element.style.display === "none" ||
-                        element.style.visibility === "hidden",
-                    };
-                  })
-                  .filter(
-                    (el) =>
-                      Object.keys(el.dataAttributes).length > 0 ||
-                      el.isHidden ||
-                      el.textContent
-                  )
-            );
-
-            // Extract API calls and functional code from scripts (important for challenges)
-            const apiCalls = await page.evaluate(() => {
-              const scripts = Array.from(
-                (globalThis as any).document.querySelectorAll("script")
-              );
-              const apiInfo: any[] = [];
-
-              scripts.forEach((script: any, index: number) => {
-                const content = script.textContent || script.innerHTML || "";
-
-                // Look for fetch calls with URLs
-                const fetchMatches = content.match(
-                  /fetch\s*\(\s*["`']([^"`']+)["`'][^}]*\}/g
-                );
-                if (fetchMatches) {
-                  fetchMatches.forEach((match: string) => {
-                    const urlMatch = match.match(/["`']([^"`']+)["`']/);
-                    if (urlMatch) {
-                      apiInfo.push({
-                        type: "fetch",
-                        url: urlMatch[1],
-                        code:
-                          match.substring(0, 200) +
-                          (match.length > 200 ? "..." : ""),
-                        scriptIndex: index,
-                      });
-                    }
-                  });
-                }
-
-                // Look for important variables or functions that might contain answers
-                const flightNumberMatches =
-                  content.match(/flightNumber[^;]*;/g);
-                if (flightNumberMatches) {
-                  flightNumberMatches.forEach((match: string) => {
-                    apiInfo.push({
-                      type: "flightNumber",
-                      code: match,
-                      scriptIndex: index,
-                    });
-                  });
-                }
-
-                // Look for challenge completion code patterns
-                const challengeMatches = content.match(/challenge[^;]*;/gi);
-                if (challengeMatches) {
-                  challengeMatches.forEach((match: string) => {
-                    apiInfo.push({
-                      type: "challenge",
-                      code: match,
-                      scriptIndex: index,
-                    });
-                  });
-                }
-              });
-
-              return apiInfo;
-            });
 
             const content = {
               title,
-              text:
-                cleanText.length > 50000
-                  ? cleanText.substring(0, 50000) + "...[truncated]"
-                  : cleanText, // Limit text to 50k characters
-              buttons: buttons.slice(0, 20), // Limit buttons
-              links: links.slice(0, 50), // Limit links
-              inputs: inputs.slice(0, 20), // Include input fields for automation
-              hiddenElements: dataElements.slice(0, 10), // Include hidden/data elements for challenges
-              apiCalls: apiCalls.slice(0, 5), // Include API calls and functional code for challenges
+              text: cleanText, // Remove character limit
+              buttons: buttons.slice(0, 20), // Increase button limit
+              links: links.slice(0, 50), // Increase link limit
             };
 
             result.pageContent = JSON.stringify(content, null, 2);
 
-            // Log the extracted page content for analysis
-            contentFlowLogger.logPlaywrightExtraction(
-              sessionId,
-              page.url(),
-              result.pageContent,
-              {
-                actionCount: request.actions.length,
-                titleLength: title.length,
-                textLength: cleanText.length,
-                buttonCount: buttons.length,
-                linkCount: links.length,
-                inputCount: inputs.length,
-                hiddenElementCount: dataElements.length,
-                apiCallCount: apiCalls.length,
-                extractionTimeMs: Date.now() - startTime,
-              }
-            );
-
-            this.logger.info("Page content extracted and logged", {
+            this.logger.info("Page content extracted", {
               sessionId,
               titleLength: title.length,
               textLength: cleanText.length,
               buttonCount: buttons.length,
               linkCount: links.length,
-              inputCount: inputs.length,
-              hiddenElementCount: dataElements.length,
-              apiCallCount: apiCalls.length,
             });
           }
 
@@ -1178,16 +887,16 @@ export class PlaywrightService {
             this.logger.info(`Navigating to initial URL: ${request.url}`, {
               sessionId: actualSessionId,
             });
-
+            
             // Use faster loading strategy - only wait for DOM content
             await page.goto(request.url, {
               waitUntil: "domcontentloaded", // Don't wait for all resources
               timeout: Math.min(timeout, 15000), // Max 15 seconds for navigation
             });
-
+            
             // Small wait for critical elements to appear
             await page.waitForTimeout(500);
-
+            
             this.logger.info(`Navigation completed: ${page.url()}`, {
               sessionId: actualSessionId,
             });
@@ -1277,263 +986,39 @@ export class PlaywrightService {
               sessionId: actualSessionId,
             });
 
-            // Get basic page content with JavaScript and unwanted content filtered out
+            // Get basic page content
             const title = await page.title();
+            const textContent = await page.textContent("body");
+            const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
 
-            // Remove only script and style content from text extraction (keep structure intact)
-            const cleanText = await page.evaluate(() => {
-              // Clone the body to avoid modifying the original DOM
-              const bodyClone = (globalThis as any).document.body.cloneNode(
-                true
-              ) as any;
-
-              // Only remove script and style tags that contain code (not interactive elements)
-              const codeSelectors = [
-                "script", // Remove script tags only
-                "style", // Remove style tags only
-                "noscript", // Remove noscript tags
-              ];
-
-              codeSelectors.forEach((selector: string) => {
-                const elements = bodyClone.querySelectorAll(selector);
-                elements.forEach((el: any) => el.remove());
-              });
-
-              // Get clean text content
-              let text = bodyClone.textContent || bodyClone.innerText || "";
-
-              // Remove only non-functional JavaScript patterns, preserve API calls and functional code
-              text = text
-                // Remove analytics and tracking code
-                .replace(/gtag\([^)]*\)/g, "") // Remove Google Analytics
-                .replace(/ga\([^)]*\)/g, "") // Remove Google Analytics
-                .replace(/fbq\([^)]*\)/g, "") // Remove Facebook Pixel
-                .replace(/\_gaq\.push\([^)]*\)/g, "") // Remove Google Analytics queue
-                // Remove console statements (but keep functional code)
-                .replace(/console\.(log|error|warn|info)\([^)]*\)/g, "")
-                // Remove comments but preserve code structure
-                .replace(/\/\*[\s\S]*?\*\//g, "") // Remove block comments
-                .replace(/\/\/(?!.*https?:\/\/).*$/gm, "") // Remove line comments but preserve URLs
-                // Clean up excessive whitespace but preserve code structure
-                .replace(/\s{3,}/g, " ") // Replace 3+ spaces with single space
-                .trim();
-
-              // Extract and preserve important API calls and functional code
-              const apiCallMatches = text.match(
-                /fetch\s*\(\s*["`'][^"`']*["`'][^}]*\}/g
-              );
-              const functionMatches = text.match(
-                /async\s+function[^}]*\}[^}]*\}/g
-              );
-
-              let preservedCode = "";
-              if (apiCallMatches) {
-                preservedCode +=
-                  "\n\nIMPORTANT API CALLS:\n" + apiCallMatches.join("\n");
-              }
-              if (functionMatches) {
-                preservedCode +=
-                  "\n\nFUNCTIONAL CODE:\n" + functionMatches.join("\n");
-              }
-
-              text = text + preservedCode;
-
-              return text;
-            });
-
-            // Get interactive elements (keep all visible elements for automation)
+            // Get interactive elements
             const buttons = await page.$$eval(
               'button, input[type="button"], input[type="submit"]',
               (elements) =>
                 elements
                   .map((el) => el.textContent?.trim() || (el as any).value)
                   .filter(Boolean)
-                  .filter((text) => text.length > 0 && text.length < 200) // Allow longer text for buttons
             );
 
-            const links = await page.$$eval(
-              "a[href]",
-              (elements) =>
-                elements
-                  .map((el) => ({
-                    text: el.textContent?.trim(),
-                    href: (el as any).href,
-                  }))
-                  .filter((l) => l.text && l.text.length > 0)
-                  .filter((l) => !l.href.startsWith("javascript:")) // Only filter out javascript links
+            const links = await page.$$eval("a[href]", (elements) =>
+              elements
+                .map((el) => ({
+                  text: el.textContent?.trim(),
+                  href: (el as any).href,
+                }))
+                .filter((l) => l.text && l.text.length > 0)
             );
-
-            // Get input fields for automation (crucial for typing actions)
-            const inputs = await page.$$eval(
-              'input:not([type="button"]):not([type="submit"]), textarea, select',
-              (elements) =>
-                elements.map((el, index) => {
-                  const element = el as any;
-
-                  // Build possible selectors for this input
-                  const selectors = [];
-
-                  if (element.id) {
-                    selectors.push(`#${element.id}`);
-                  }
-                  if (element.name) {
-                    selectors.push(`[name="${element.name}"]`);
-                  }
-                  if (element.placeholder) {
-                    selectors.push(`[placeholder="${element.placeholder}"]`);
-                  }
-                  if (element.type && element.type !== "text") {
-                    selectors.push(`input[type="${element.type}"]`);
-                  }
-
-                  // Fallback selectors
-                  selectors.push(
-                    `${element.tagName.toLowerCase()}:nth-of-type(${index + 1})`
-                  );
-                  selectors.push(
-                    `${element.tagName.toLowerCase()}:nth-child(${index + 1})`
-                  );
-
-                  return {
-                    type: element.type || "text",
-                    name: element.name || null,
-                    id: element.id || null,
-                    placeholder: element.placeholder || null,
-                    value: element.value || null,
-                    tagName: element.tagName.toLowerCase(),
-                    selectors: selectors, // Provide multiple selector options
-                    index: index, // Add index for fallback
-                  };
-                })
-            );
-
-            // Get elements with data attributes (often used for hidden content or special interactions)
-            const dataElements = await page.$$eval(
-              '[data-secret], [data-hidden], [data-value], [data-answer], [data-key], [style*="display: none"], [style*="visibility: hidden"]',
-              (elements) =>
-                elements
-                  .map((el, index) => {
-                    const element = el as any;
-                    const dataAttrs: Record<string, string> = {};
-
-                    // Collect all data-* attributes
-                    for (const attr of element.attributes) {
-                      if (attr.name.startsWith("data-")) {
-                        dataAttrs[attr.name] = attr.value;
-                      }
-                    }
-
-                    return {
-                      tagName: element.tagName.toLowerCase(),
-                      id: element.id || null,
-                      className: element.className || null,
-                      textContent: (element.textContent || "").trim(),
-                      dataAttributes: dataAttrs,
-                      style: element.style.cssText || null,
-                      isHidden:
-                        element.style.display === "none" ||
-                        element.style.visibility === "hidden",
-                    };
-                  })
-                  .filter(
-                    (el) =>
-                      Object.keys(el.dataAttributes).length > 0 ||
-                      el.isHidden ||
-                      el.textContent
-                  )
-            );
-
-            // Extract API calls and functional code from scripts (important for challenges)
-            const apiCalls = await page.evaluate(() => {
-              const scripts = Array.from(
-                (globalThis as any).document.querySelectorAll("script")
-              );
-              const apiInfo: any[] = [];
-
-              scripts.forEach((script: any, index: number) => {
-                const content = script.textContent || script.innerHTML || "";
-
-                // Look for fetch calls with URLs
-                const fetchMatches = content.match(
-                  /fetch\s*\(\s*["`']([^"`']+)["`'][^}]*\}/g
-                );
-                if (fetchMatches) {
-                  fetchMatches.forEach((match: string) => {
-                    const urlMatch = match.match(/["`']([^"`']+)["`']/);
-                    if (urlMatch) {
-                      apiInfo.push({
-                        type: "fetch",
-                        url: urlMatch[1],
-                        code:
-                          match.substring(0, 200) +
-                          (match.length > 200 ? "..." : ""),
-                        scriptIndex: index,
-                      });
-                    }
-                  });
-                }
-
-                // Look for important variables or functions that might contain answers
-                const flightNumberMatches =
-                  content.match(/flightNumber[^;]*;/g);
-                if (flightNumberMatches) {
-                  flightNumberMatches.forEach((match: string) => {
-                    apiInfo.push({
-                      type: "flightNumber",
-                      code: match,
-                      scriptIndex: index,
-                    });
-                  });
-                }
-
-                // Look for challenge completion code patterns
-                const challengeMatches = content.match(/challenge[^;]*;/gi);
-                if (challengeMatches) {
-                  challengeMatches.forEach((match: string) => {
-                    apiInfo.push({
-                      type: "challenge",
-                      code: match,
-                      scriptIndex: index,
-                    });
-                  });
-                }
-              });
-
-              return apiInfo;
-            });
 
             const content = {
               title,
-              text:
-                cleanText.length > 50000
-                  ? cleanText.substring(0, 50000) + "...[truncated]"
-                  : cleanText, // Limit text to 50k characters
-              buttons: buttons.slice(0, 20), // Limit buttons
-              links: links.slice(0, 50), // Limit links
-              inputs: inputs.slice(0, 20), // Include input fields for automation
-              hiddenElements: dataElements.slice(0, 10), // Include hidden/data elements for challenges
-              apiCalls: apiCalls.slice(0, 5), // Include API calls and functional code for challenges
+              text: cleanText, // No character limit
+              buttons: buttons.slice(0, 20), // Increase button limit
+              links: links.slice(0, 50), // Increase link limit
             };
 
             result.pageContent = JSON.stringify(content, null, 2);
 
-            // Log the extracted page content for analysis (persistent session)
-            contentFlowLogger.logPlaywrightExtraction(
-              actualSessionId,
-              page.url(),
-              result.pageContent,
-              {
-                actionCount: request.actions.length,
-                titleLength: title.length,
-                textLength: cleanText.length,
-                buttonCount: buttons.length,
-                linkCount: links.length,
-                extractionTimeMs: Date.now() - startTime,
-                isPersistentSession: true,
-              }
-            );
-
-            this.logger.info("Page content extracted and logged", {
+            this.logger.info("Page content extracted", {
               sessionId: actualSessionId,
               titleLength: title.length,
               textLength: cleanText.length,

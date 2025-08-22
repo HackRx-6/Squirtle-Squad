@@ -1,7 +1,6 @@
 import type OpenAI from "openai";
 import { AppConfigService } from "../../config/app.config";
 import { playwrightService } from "../webAutomation";
-import { contentFlowLogger } from "../logging/contentFlow.logging";
 
 type OpenAITool = OpenAI.Chat.Completions.ChatCompletionTool;
 type ToolChoice =
@@ -485,74 +484,29 @@ export const executeToolCall = async (
           );
 
           if (!result.success) {
-            const errorResponse = JSON.stringify({
+            return JSON.stringify({
               ok: false,
               error: result.error || "Web automation failed",
             });
-
-            // Log the failed tool response
-            contentFlowLogger.logToolResponse(
-              sessionId,
-              result.url || url,
-              errorResponse,
-              {
-                actionCount: actions.length,
-                success: false,
-                error: result.error,
-              }
-            );
-
-            return errorResponse;
           }
 
-          const toolResponse = JSON.stringify({
+          return JSON.stringify({
             ok: true,
             url: result.url,
             pageContent: result.pageContent,
             metadata: result.metadata,
           });
-
-          // Log the tool response for analysis
-          contentFlowLogger.logToolResponse(
-            sessionId,
-            result.url || url,
-            toolResponse,
-            {
-              actionCount: actions.length,
-              success: true,
-              pageContentLength: result.pageContent?.length || 0,
-              metadata: result.metadata,
-            }
-          );
-
-          return toolResponse;
         } catch (error: any) {
           console.error(`❌ [WebAutomation] Error:`, error);
 
           // Invalidate session on persistent web automation errors
           const sessionTracker = WebAutomationSessionTracker.getInstance();
-          const currentSessionId = sessionTracker.getOrCreateSessionId();
           sessionTracker.invalidateSession();
 
-          const errorResponse = JSON.stringify({
+          return JSON.stringify({
             ok: false,
             error: error.message || "Unknown web automation error",
           });
-
-          // Log the exception in tool response
-          contentFlowLogger.logToolResponse(
-            currentSessionId,
-            url,
-            errorResponse,
-            {
-              actionCount: actions.length,
-              success: false,
-              error: error.message || "Unknown web automation error",
-              exception: true,
-            }
-          );
-
-          return errorResponse;
         }
       }
       default:

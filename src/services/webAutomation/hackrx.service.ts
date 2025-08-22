@@ -1,7 +1,6 @@
 import { runWithToolsIfRequested } from "../LLM/tools.LLM";
 import { Config } from "../../config";
 import { loggingService } from "../logging";
-import { contentFlowLogger } from "../logging/contentFlow.logging";
 import type { TimerContext } from "../timer";
 import { playwrightService } from "./playwright.service";
 import OpenAI from "openai";
@@ -354,17 +353,6 @@ For each question that involves interacting with the website, use the web_automa
         userMessageLength: userMessage.length,
       });
 
-      // Log the prompts for analysis
-      contentFlowLogger.logLLMPrompt(sessionId, "system_prompt", systemPrompt, {
-        questionsCount: request.questions.length,
-        url: request.url,
-      });
-
-      contentFlowLogger.logLLMPrompt(sessionId, "user_message", userMessage, {
-        questionsCount: request.questions.length,
-        url: request.url,
-      });
-
       // Get LLM config and create client directly
       this.logger.debug("Initializing LLM client", { sessionId });
       const aiConfig = Config.ai;
@@ -411,14 +399,6 @@ For each question that involves interacting with the website, use the web_automa
           responsePreview: rawResponse.substring(0, 200) + "...",
         });
 
-        // Log the LLM response for analysis
-        contentFlowLogger.logLLMResponse(sessionId, rawResponse, {
-          questionsCount: request.questions.length,
-          url: request.url,
-          model: llmConfig.primary.model,
-          processingTimeMs: llmProcessingTime,
-        });
-
         // Check timeout after LLM processing
         if (timerContext.isExpired) {
           this.logger.error("Request timed out during LLM processing", {
@@ -448,15 +428,6 @@ For each question that involves interacting with the website, use the web_automa
           rawResponse.trim(),
           request.questions
         );
-
-        // Log the final parsed answers
-        contentFlowLogger.logHackRXFinalAnswers(sessionId, answers, {
-          questionsCount: request.questions.length,
-          url: request.url,
-          model: llmConfig.primary.model,
-          totalProcessingTimeMs: Date.now() - startTime,
-          llmProcessingTimeMs: llmProcessingTime,
-        });
 
         const result: HackRXResponse = {
           answers,
@@ -489,9 +460,6 @@ For each question that involves interacting with the website, use the web_automa
           finalUrl: request.url,
         });
 
-        // Finish the content flow logging session
-        contentFlowLogger.finishSession(sessionId);
-
         return {
           success: true,
           data: result,
@@ -513,9 +481,6 @@ For each question that involves interacting with the website, use the web_automa
             error: llmError.message,
           }
         );
-
-        // Finish the content flow logging session even on error
-        contentFlowLogger.finishSession(sessionId);
 
         return {
           success: false,
@@ -543,9 +508,6 @@ For each question that involves interacting with the website, use the web_automa
           error: error.message,
         }
       );
-
-      // Finish the content flow logging session even on unexpected error
-      contentFlowLogger.finishSession(sessionId);
 
       return {
         success: false,
