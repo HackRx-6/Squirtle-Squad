@@ -174,7 +174,7 @@ If an action fails, explain what went wrong and suggest alternatives.`;
 Please help me with these questions/tasks:
 ${questionsText}
 
-For each question that involves interacting with the website, use the web_automation tool to perform the necessary actions and then provide answers based on the results.`;
+For each question that involves interacting with the website, use the web_automation or get_json_batch tool to perform the necessary actions and then provide answers based on the results.`;
   }
 
   private parseMultipleAnswers(

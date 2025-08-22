@@ -104,14 +104,14 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
       function: {
         name: "http_get_json_batch",
         description:
-          "Perform HTTP GET to multiple JSON API endpoints and return parsed JSON whenever fetch request is needed",
+          "Perform HTTP GET to endpoints, fetch answers from them, and get whatever info you need from an API and return parsed JSON whenever fetch request is needed",
         parameters: {
           type: "object",
           properties: {
             urls: {
               type: "array",
               items: { type: "string" },
-              description: "List of absolute URLs to fetch (http/https).",
+              description: "List of URLs to fetch (http/https).",
             },
             headers: {
               type: "object",
@@ -123,42 +123,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
         },
       },
     },
-    // {
-    //   type: "function",
-    //   function: {
-    //     name: "resolve_flight_number",
-    //     description:
-    //       "Given a city and a list of candidate flight-number API endpoints, call each endpoint, verify the response corresponds to the specified city, and return the best-matching flight number. If none match, return a fallback from any response.",
-    //     parameters: {
-    //       type: "object",
-    //       properties: {
-    //         city: {
-    //           type: "string",
-    //           description:
-    //             "Target city to validate against API responses (case-insensitive)",
-    //         },
-    //         endpoints: {
-    //           type: "array",
-    //           items: { type: "string" },
-    //           description:
-    //             "List of absolute URLs to query for flight number candidates",
-    //         },
-    //         headers: {
-    //           type: "object",
-    //           description: "Optional HTTP headers to include for all requests",
-    //           additionalProperties: { type: "string" },
-    //         },
-    //         matchKeys: {
-    //           type: "array",
-    //           items: { type: "string" },
-    //           description:
-    //             "Optional list of JSON keys to prioritize when checking for city name (e.g., ['city','ticket.city'])",
-    //         },
-    //       },
-    //       required: ["city", "endpoints"],
-    //     },
-    //   },
-    // },
+   
     {
       type: "function",
       function: {
@@ -333,105 +298,8 @@ export const executeToolCall = async (
   const { name, arguments: rawArgs } = toolCall.function;
   try {
     const args = rawArgs ? JSON.parse(rawArgs) : {};
-    const startedAt = Date.now();
     console.log(`🛠️ [ToolCall:start] name=${name} args=${previewString(args)}`);
     switch (name) {
-      // case "resolve_flight_number": {
-      //   const { city, endpoints, headers, matchKeys } = args as {
-      //     city: string;
-      //     endpoints: string[];
-      //     headers?: Record<string, string>;
-      //     matchKeys?: string[];
-      //   };
-      //   const cityLower = (city || "").trim().toLowerCase();
-      //   if (!cityLower || !Array.isArray(endpoints) || endpoints.length === 0) {
-      //     return JSON.stringify({
-      //       ok: false,
-      //       error: "Invalid arguments: provide city and endpoints[]",
-      //     });
-      //   }
-
-      //   const qa = AppConfigService.getInstance().getQAConfig();
-      //   const timeoutMs = qa.toolCalls?.advanced?.timeoutMs || 8000;
-      //   const controller = new AbortController();
-      //   const timeout = setTimeout(() => controller.abort(), timeoutMs);
-      //   const results: Array<{
-      //     url: string;
-      //     ok: boolean;
-      //     status: number;
-      //     body: any;
-      //     matched: boolean;
-      //     candidateFlight?: string | number | null;
-      //   }> = [];
-      //   try {
-      //     for (const url of endpoints) {
-      //       assertSafeUrl(url);
-      //       try {
-      //         const res = await fetch(url, {
-      //           method: "GET",
-      //           headers,
-      //           signal: controller.signal,
-      //         });
-      //         const contentType = res.headers.get("content-type") || "";
-      //         let body: any = null;
-      //         try {
-      //           body = await res.json();
-      //         } catch {
-      //           const text = await res.text();
-      //           body = {
-      //             _nonJsonTextPreview: text.substring(0, 8000),
-      //           };
-      //         }
-
-      //         const matched = doesBodyMatchCity(body, cityLower, matchKeys);
-      //         const candidateFlight = extractFlightNumber(body);
-      //         results.push({
-      //           url,
-      //           ok: res.ok,
-      //           status: res.status,
-      //           body,
-      //           matched,
-      //           candidateFlight,
-      //         });
-      //       } catch (e) {
-      //         results.push({
-      //           url,
-      //           ok: false,
-      //           status: 0,
-      //           body: {
-      //             error: e instanceof Error ? e.message : String(e),
-      //           },
-      //           matched: false,
-      //           candidateFlight: null,
-      //         });
-      //       }
-      //     }
-
-      //     // Prefer first matched; else fallback to first successful; else any
-      //     const matched = results.find(
-      //       (r) => r.ok && r.matched && r.candidateFlight
-      //     );
-      //     const successful = results.find((r) => r.ok && r.candidateFlight);
-      //     const fallback = results[0];
-
-      //     const selected = matched || successful || fallback;
-      //     return JSON.stringify({
-      //       ok: !!selected?.ok,
-      //       selectedUrl: selected?.url,
-      //       matched: !!selected?.matched,
-      //       candidateFlight: selected?.candidateFlight ?? null,
-      //       tried: results.map((r) => ({
-      //         url: r.url,
-      //         ok: r.ok,
-      //         status: r.status,
-      //         matched: r.matched,
-      //         candidateFlight: r.candidateFlight ?? null,
-      //       })),
-      //     });
-      //   } finally {
-      //     clearTimeout(timeout);
-      //   }
-      // }
       case "http_get_json_batch": {
         const { urls, headers } = args as {
           urls: string[];
