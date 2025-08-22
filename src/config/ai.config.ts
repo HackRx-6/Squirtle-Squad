@@ -104,13 +104,30 @@ export class AIConfigService {
         // Check if Claude is configured for Excel files
         const hasClaudePrimary = CLAUDE_API_KEY && CLAUDE_BASE_URL;
 
-        // Log configuration for debugging (without sensitive data)
-        console.log(`🔧 LLM Configuration:`);
-        console.log(`   Primary - Base URL: ${llmBaseURL}`);
-        console.log(`   Primary - Model: ${model}`);
-        console.log(
-            `   Primary - API Key: ${LLM_API_KEY ? "[SET]" : "[NOT SET]"}`
-        );
+        // EXTENSIVE DEBUGGING - Log configuration details
+        console.log("=================== 🔧 AI CONFIG DEBUG START ===================");
+        console.log(`🔧 RAW ENVIRONMENT VARIABLES:`);
+        console.log(`   LLM_API_KEY: ${LLM_API_KEY ? `[SET - Length: ${LLM_API_KEY.length}, Starts: ${LLM_API_KEY.substring(0, 15)}...]` : "[NOT SET OR EMPTY]"}`);
+        console.log(`   LLM_BASE_URL: "${LLM_BASE_URL || "NOT SET"}"`);
+        console.log(`   LLM_MODEL: "${LLM_MODEL || "NOT SET"}"`);
+        console.log(`   LLM_SERVICE: "${LLM_SERVICE || "NOT SET"}"`);
+        console.log(`   LLM_DEPLOYMENT_NAME: "${LLM_DEPLOYMENT_NAME || "NOT SET"}"`);
+        console.log(`   LLM_API_VERSION: "${LLM_API_VERSION || "NOT SET"}"`);
+        
+        console.log(`🔧 PROCESSED VALUES:`);
+        console.log(`   Computed Base URL: "${llmBaseURL}"`);
+        console.log(`   Computed Model: "${model}"`);
+        console.log(`   Default Base URL Used: "${defaultBaseURL}"`);
+        
+        console.log(`🔧 VALIDATION RESULTS:`);
+        console.log(`   Has API Key: ${!!LLM_API_KEY}`);
+        console.log(`   Base URL Valid: ${LLM_BASE_URL ? LLM_BASE_URL.match(/^https?:\/\/.+/) ? "YES" : "INVALID FORMAT" : "NOT SET"}`);
+        
+        console.log(`🔧 EMBEDDING VARIABLES:`);
+        console.log(`   EMBEDDINGS_MODEL_API_KEY: ${EMBEDDINGS_MODEL_API_KEY ? `[SET - Length: ${EMBEDDINGS_MODEL_API_KEY.length}]` : "[NOT SET]"}`);
+        console.log(`   EMBEDDINGS_MODEL_ENDPOINT: "${EMBEDDINGS_MODEL_ENDPOINT || "NOT SET"}"`);
+        console.log(`   EMBEDDINGS_MODEL_DEPLOYMENT_NAME: "${EMBEDDINGS_MODEL_DEPLOYMENT_NAME || "NOT SET"}"`);
+        console.log("=================== 🔧 AI CONFIG DEBUG END ===================");
 
         if (hasSecondaryLLM) {
             console.log(`   Secondary - Base URL: ${LLM_BASE_URL_2}`);
