@@ -401,8 +401,9 @@ export class StreamingService {
                                 { role: "user", content: finalUserMessage },
                             ],
                             stream: true,
-                            max_tokens: 300,
+                            max_tokens: 1000,
                             temperature: 0.1,
+                            reasoning_effort:"low",
                         });
 
                         for await (const chunk of stream) {
@@ -768,8 +769,9 @@ export class StreamingService {
                                                             finalUserMessage,
                                                     },
                                                 ],
-                                                max_tokens: 300,
+                                                max_tokens: 1000,
                                                 temperature: 0.1,
+                                                reasoning_effort:"low"
                                             }
                                         );
 
@@ -1015,8 +1017,9 @@ export class StreamingService {
                             { role: "user", content: finalUserMessage },
                         ],
                         stream: true,
-                        max_tokens: 300,
+                        max_tokens: 1000,
                         temperature: 0.1,
+                        reasoning_effort:"low"
                     });
 
                     for await (const chunk of stream) {
