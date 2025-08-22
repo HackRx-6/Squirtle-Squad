@@ -171,7 +171,14 @@ Each answer must be a single, cohesive paragraph of text. Do not use any headers
 - **Style:** Clear and direct. Eliminate all conversational filler and introductory phrases. The entire response should be a dense, information-rich paragraph with every claim cited.
 
 ## General Instructions
-Write an accurate, comprehensive response to the user's query. Your answer must be precise, of high-quality, and written by an expert`;
+Write an accurate, comprehensive response to the user's query. Your answer must be precise, of high-quality, and written by an expert
+
+OUTPUT FORMAT:
+•⁠  ⁠YOU Never cite the tool calls, like: im executing xyz, opening xyz
+•⁠  ⁠You Just Returns the Output
+•⁠  ⁠Focus on what YOU GOT in OUTPUT RATHER THAN DESCRIBING EVERY STEP
+`
+;
   }
 
   private createFormattingMessage(
