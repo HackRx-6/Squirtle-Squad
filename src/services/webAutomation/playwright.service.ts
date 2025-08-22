@@ -78,9 +78,10 @@ export class PlaywrightService {
         if (action.selector) {
           await page.locator(action.selector).scrollIntoViewIfNeeded();
         } else {
-          await page.evaluate(() =>
-            window.scrollTo(0, document.body.scrollHeight)
-          );
+          await page.evaluate(() => {
+            // @ts-ignore - This runs in browser context where window and document are available
+            window.scrollTo(0, document.body.scrollHeight);
+          });
         }
         break;
 
@@ -239,22 +240,22 @@ export class PlaywrightService {
             // Get interactive elements
             const buttons = await page.$$eval(
               'button, input[type="button"], input[type="submit"]',
-              (elements) =>
+              (elements: Element[]) =>
                 elements
                   .map(
-                    (el) =>
-                      el.textContent?.trim() || (el as HTMLInputElement).value
+                    (el: any) =>
+                      el.textContent?.trim() || el.value
                   )
                   .filter(Boolean)
             );
 
-            const links = await page.$$eval("a[href]", (elements) =>
+            const links = await page.$$eval("a[href]", (elements: Element[]) =>
               elements
-                .map((el) => ({
+                .map((el: any) => ({
                   text: el.textContent?.trim(),
-                  href: (el as HTMLAnchorElement).href,
+                  href: el.href,
                 }))
-                .filter((l) => l.text && l.text.length > 0)
+                .filter((l: any) => l.text && l.text.length > 0)
             );
 
             const content = {
