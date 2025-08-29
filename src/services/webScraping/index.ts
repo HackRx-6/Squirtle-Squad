@@ -248,9 +248,9 @@ export { enhancedWebScrapingService } from "./enhanced.webScraping";
 // Export types
 export * from "./types";
 
-// Export additional classes for direct usage
-export { UrlDetectionService } from "./urlDetection.webScraping";
-export { CoreWebScrapingService } from "./coreWebScraping.webScraping";
-export { LinkedContentCacheService } from "./linkedContentCache.webScraping";
-export { WebQAService } from "./webQA.webScraping";
+// Export additional classes for direct usage (use different names to avoid conflicts)
+export { UrlDetectionService as UrlDetectionServiceClass } from "./urlDetection.webScraping";
+export { CoreWebScrapingService as CoreWebScrapingServiceClass } from "./coreWebScraping.webScraping";
+export { LinkedContentCacheService as LinkedContentCacheServiceClass } from "./linkedContentCache.webScraping";
+export { WebQAService as WebQAServiceClass } from "./webQA.webScraping";
 export { EnhancedWebScrapingService } from "./enhanced.webScraping";

@@ -60,7 +60,7 @@ RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded
 
 # Copy source code and build (excluding native modules from bundle)
 COPY . .
-RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --splitting
+RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --external pdfjs-dist --external unpdf --splitting
 
 # Production stage - keep build tools for native modules
 FROM oven/bun:1.1.38-alpine
