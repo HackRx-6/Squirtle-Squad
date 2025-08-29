@@ -16,6 +16,7 @@ RUN apk add --no-cache \
     npm \
     libstdc++ \
     libgcc \
+    git \
     # Playwright browser dependencies
     chromium \
     chromium-chromedriver \
@@ -79,6 +80,7 @@ RUN apk add --no-cache \
     build-base \
     nodejs \
     npm \
+    git \
     # Playwright browser dependencies
     chromium \
     chromium-chromedriver \
