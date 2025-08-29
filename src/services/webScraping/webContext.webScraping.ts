@@ -9,7 +9,7 @@ import { RecursiveTextChunkingStrategy } from "../chunking/recursiveText.chunkin
 /**
  * Service for enriching context with web content from URLs found in questions or documents
  */
-export class WebContextService {
+class WebContextService {
   private static instance: WebContextService;
   private configService: AppConfigService;
   private chunker: RecursiveTextChunkingStrategy;
@@ -125,7 +125,9 @@ export class WebContextService {
     // Map back to original candidateUrls format
     const mappedResults = rankedResults
       .map((r) => uniqueUrls.find((c) => c.url === r.url))
-      .filter((item): item is { url: string; idx: number } => item !== undefined);
+      .filter(
+        (item): item is { url: string; idx: number } => item !== undefined
+      );
 
     console.log("🗺️ Mapped results:", mappedResults);
 
@@ -236,5 +238,3 @@ export class WebContextService {
     return { webChunks, metadata };
   }
 }
-
-export const webContextService = WebContextService.getInstance();

@@ -17,4 +17,4 @@ export { CoreWebScrapingService as CoreWebScrapingServiceClass } from "./coreWeb
 export { LinkedContentCacheService as LinkedContentCacheServiceClass } from "./linkedContentCache.webScraping";
 export { WebQAService as WebQAServiceClass } from "./webQA.webScraping";
 export { EnhancedWebScrapingService } from "./enhanced.webScraping";
-export { WebContextService as WebContextServiceClass } from "./webContext.webScraping";
+// Note: WebContextService class is not exported to avoid bundling conflicts

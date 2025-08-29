@@ -178,69 +178,15 @@ export const pdfController = {
 
           if (nonDocUrl) {
             console.log(
-              "🌐 Detected non-document URL. Using web tool-call flow."
+              "🌐 Detected non-document URL. Web context service has been removed."
             );
 
-            const qaService = new InMemoryQAService();
-
-            // Prepare web context (include the documents URL in the question text so it gets picked up)
-            const { webContextService } = await import(
-              "../services/webScraping/webContext.webScraping"
-            );
-
-            const augmentedQuestions = questions.map(
-              (q: string) => `${q}\nURL: ${documents}`
-            );
-
-            // Build combined web chunks for all questions (best-effort; first question drives scraping)
-            const webPrep = await webContextService.enrichContextWithWebContent(
-              {
-                question: augmentedQuestions[0] || documents,
-                retrievedChunks: [],
-                timerAbort: timerContext.abortController.signal,
-              }
-            );
-
-            if (!webPrep.webChunks.length) {
-              console.warn(
-                "⚠️ No web content could be extracted from the URL."
-              );
-              const response = {
-                answers: questions.map(
-                  () =>
-                    "I couldn't extract any readable content from the provided URL. Please share a document or a different link."
-                ),
-              };
-              return new Response(JSON.stringify(response), {
-                status: 200,
-                headers: { "Content-Type": "application/json" },
-              });
-            }
-
-            // Ingest web chunks into vector store and answer
-            await qaService.processDocument(
-              webPrep.webChunks,
-              detectedFileName || "web",
-              webPrep.webChunks.length
-            );
-
-            const streamingAnswers =
-              await qaService.answerMultipleQuestionsWithStreaming(
-                augmentedQuestions,
-                detectedFileName || "web",
-                timerContext
-              );
-
-            const answers = streamingAnswers.map((answer) =>
-              answer.replace(/\n+/g, " ").replace(/\s+/g, " ").trim()
-            );
-
-            const response = { answers };
-            console.log(
-              "📤 Complete response body being sent (web-only):",
-              JSON.stringify(response, null, 2)
-            );
-
+            const response = {
+              answers: questions.map(
+                () =>
+                  "Web content processing is not available. Please share a document file instead."
+              ),
+            };
             return new Response(JSON.stringify(response), {
               status: 200,
               headers: { "Content-Type": "application/json" },

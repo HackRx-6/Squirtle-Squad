@@ -7,10 +7,7 @@ import { LLMService } from "../LLM/core.LLM";
 import { streamingService } from "../LLM";
 import { FANTASTIC_ROBO_SYSTEM_PROMPT } from "../../prompts/prompt8";
 import { TOOL_AWARE_SYSTEM_PROMPT_ENHANCED } from "../../prompts/prompts";
-import {
-  urlDetection as urlDetectionService,
-} from "../webScraping";
-import { webContextService } from "../webScraping/webContext.webScraping";
+import { urlDetection as urlDetectionService } from "../webScraping";
 import type { DocumentChunk, QuestionAnswer } from "../../types/document.types";
 import type { TimerContext } from "../timer";
 
@@ -1003,44 +1000,8 @@ export class InMemoryQAService {
               if (qaConfig2.toolCalls?.enabled) {
                 const intent = urlDetectionService.classifyUrlIntent(question);
                 if (intent.requiresUrl) {
-                  const { webChunks } =
-                    await webContextService.enrichContextWithWebContent({
-                      question,
-                      retrievedChunks: similarChunks.map((c) => ({
-                        content: c.content,
-                        pageNumber: c.pageNumber,
-                        chunkIndex: c.chunkIndex,
-                      })),
-                      timerAbort: timerContext.abortController.signal,
-                    });
-                  if (webChunks.length > 0) {
-                    const texts = webChunks.map((c) => c.content);
-                    const embeddingsWeb =
-                      await this.batchedEmbeddingService.generateBatchEmbeddings(
-                        texts,
-                        qaConfig2.embeddingTimeout
-                      );
-                    const appendPayload = webChunks
-                      .map((c, i) => ({
-                        content: c.content,
-                        embedding: embeddingsWeb[i] || [],
-                        pageNumber: c.pageNumber,
-                        chunkIndex: i,
-                        metadata: {
-                          ...(c.metadata || {}),
-                          source: "web",
-                        },
-                        fileName: this.fileName || "web",
-                      }))
-                      .filter((x) => x.embedding.length > 0);
-                    await this.vectorService.appendPrecomputedEmbeddings(
-                      appendPayload
-                    );
-                    augmentedChunks = await this.vectorService.findSimilar(
-                      embedding,
-                      dynamicChunksToLLM
-                    );
-                  }
+                  // Web context service has been removed
+                  console.warn("Web context service not available");
                 }
               }
             } catch (e) {
