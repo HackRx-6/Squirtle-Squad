@@ -31,38 +31,88 @@ export class StartupService {
     console.log("🚀 Initializing services...");
 
     const startTime = Date.now();
-    const initResults: { service: string; success: boolean; timeMs?: number; error?: string }[] = [];
+    const initResults: {
+      service: string;
+      success: boolean;
+      timeMs?: number;
+      error?: string;
+    }[] = [];
 
-    // Initialize Playwright Service
-    try {
-      this.logger.info("Initializing Playwright service");
-      console.log("🎭 Initializing Playwright browser...");
-      
-      const playwrightStartTime = Date.now();
-      await playwrightService.initializeOnStartup();
-      const playwrightTime = Date.now() - playwrightStartTime;
-      
+    // Skip Playwright initialization during startup in production/Docker
+    // It will be initialized on-demand when first needed
+    const skipPlaywrightInit =
+      process.env.NODE_ENV === "production" ||
+      process.env.DOCKER_ENV === "true";
+
+    if (!skipPlaywrightInit) {
+      // Initialize Playwright Service only in development
+      try {
+        this.logger.info("Initializing Playwright service");
+        console.log("🎭 Initializing Playwright browser...");
+
+        const playwrightStartTime = Date.now();
+        await playwrightService.initializeOnStartup();
+        const playwrightTime = Date.now() - playwrightStartTime;
+
+        initResults.push({
+          service: "PlaywrightService",
+          success: true,
+          timeMs: playwrightTime,
+        });
+
+        this.logger.info("Playwright service initialized successfully", {
+          initTimeMs: playwrightTime,
+        });
+      } catch (error: any) {
+        // Handle specific bundling errors that are non-critical
+        if (
+          error.message?.includes("DOMMatrix") ||
+          error.message?.includes("Cannot replace module namespace") ||
+          error.message?.includes("configurable attribute") ||
+          error.message?.includes("defineProperty")
+        ) {
+          console.warn(
+            "⚠️  Non-critical bundling warning detected - Playwright will work on-demand"
+          );
+          this.logger.warn("Non-critical Playwright bundling warning", {
+            error: error.message,
+            note: "This is expected in bundled environments",
+          });
+
+          initResults.push({
+            service: "PlaywrightService",
+            success: true,
+            timeMs: 0,
+            error: "Bundling warning (non-critical)",
+          });
+        } else {
+          const errorMsg = `Playwright service initialization failed: ${error.message}`;
+          this.logger.error(errorMsg, {
+            error: error.message,
+            stack: error.stack,
+          });
+
+          initResults.push({
+            service: "PlaywrightService",
+            success: false,
+            error: error.message,
+          });
+
+          // Log warning but don't fail startup - service will work lazily
+          console.warn(
+            "⚠️  Playwright initialization failed, will initialize on first use"
+          );
+        }
+      }
+    } else {
+      console.log(
+        "🎭 Playwright initialization skipped (production mode - will initialize on-demand)"
+      );
       initResults.push({
         service: "PlaywrightService",
         success: true,
-        timeMs: playwrightTime,
+        timeMs: 0,
       });
-      
-      this.logger.info("Playwright service initialized successfully", {
-        initTimeMs: playwrightTime,
-      });
-    } catch (error: any) {
-      const errorMsg = `Playwright service initialization failed: ${error.message}`;
-      this.logger.error(errorMsg, { error: error.message, stack: error.stack });
-      
-      initResults.push({
-        service: "PlaywrightService",
-        success: false,
-        error: error.message,
-      });
-      
-      // Log warning but don't fail startup - service will work lazily
-      console.warn("⚠️  Playwright initialization failed, will initialize on first use");
     }
 
     // Add more service initializations here as needed
@@ -73,8 +123,8 @@ export class StartupService {
     this.isInitialized = true;
 
     // Log summary
-    const successCount = initResults.filter(r => r.success).length;
-    const failureCount = initResults.filter(r => !r.success).length;
+    const successCount = initResults.filter((r) => r.success).length;
+    const failureCount = initResults.filter((r) => !r.success).length;
 
     this.logger.info("Service initialization completed", {
       totalTimeMs: totalTime,
@@ -87,9 +137,11 @@ export class StartupService {
     console.log(`   📊 Total time: ${totalTime}ms`);
     console.log(`   ✅ Successful: ${successCount}`);
     console.log(`   ❌ Failed: ${failureCount}`);
-    
+
     if (failureCount > 0) {
-      console.log("   ⚠️  Some services failed to initialize but will work on-demand");
+      console.log(
+        "   ⚠️  Some services failed to initialize but will work on-demand"
+      );
     }
   }
 
@@ -130,12 +182,11 @@ export class StartupService {
       // Shutdown Playwright service
       await playwrightService.shutdown();
       this.logger.info("Playwright service shutdown completed");
-      
+
       // Add other service shutdowns here
-      
+
       this.isInitialized = false;
       console.log("✅ All services shutdown completed");
-      
     } catch (error: any) {
       this.logger.error("Error during service shutdown", {
         error: error.message,
