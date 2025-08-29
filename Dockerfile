@@ -134,9 +134,20 @@ RUN ls -la node_modules/hnswlib-node/build/ && \
 
 # Copy source files needed at runtime
 COPY src ./src
+COPY scripts ./scripts
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh
 
 # Create logs directory
 RUN mkdir -p logs
+
+# Set up Git configuration
+RUN ./scripts/setup-git.sh
+
+# Set up Git remote (you'll need to replace with your actual repository URL)
+# Note: This requires authentication - see deployment guide for setting up credentials
+ENV GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git"
 
 # Environment
 ENV NODE_ENV=production
