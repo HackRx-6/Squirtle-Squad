@@ -124,7 +124,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
         },
       },
     },
-   
+
     {
       type: "function",
       function: {
@@ -294,7 +294,8 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
           properties: {
             command: {
               type: "string",
-              description: "The terminal command to execute (e.g., 'ls -la', 'npm install', 'cat file.txt'). Not required when using fileUrl.",
+              description:
+                "The terminal command to execute (e.g., 'ls -la', 'npm install', 'cat file.txt'). Not required when using fileUrl.",
             },
             options: {
               type: "object",
@@ -305,7 +306,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                   description: "Timeout in milliseconds (default: 30000)",
                 },
                 workingDirectory: {
-                  type: "string", 
+                  type: "string",
                   description: "Working directory for command execution",
                 },
                 environment: {
@@ -315,7 +316,8 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                 },
                 shell: {
                   type: "string",
-                  description: "Shell to use for execution (default: system default)",
+                  description:
+                    "Shell to use for execution (default: system default)",
                 },
                 maxOutputSize: {
                   type: "number",
@@ -323,12 +325,14 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                 },
                 fileUrl: {
                   type: "string",
-                  description: "URL to download and execute a code file (supports .js, .py, .ts, .sh files)",
+                  description:
+                    "URL to download and execute a code file (supports .js, .py, .ts, .sh files)",
                 },
                 runtime: {
                   type: "string",
                   enum: ["auto", "node", "python", "bash", "deno", "bun"],
-                  description: "Runtime to use for file execution (default: auto-detect from file extension)",
+                  description:
+                    "Runtime to use for file execution (default: auto-detect from file extension)",
                 },
               },
             },
@@ -562,7 +566,7 @@ export const executeToolCall = async (
             shell?: string;
             maxOutputSize?: number;
             fileUrl?: string;
-            runtime?: 'auto' | 'node' | 'python' | 'bash' | 'deno' | 'bun';
+            runtime?: "auto" | "node" | "python" | "bash" | "deno" | "bun";
           };
         };
 
@@ -583,12 +587,14 @@ export const executeToolCall = async (
 
         try {
           if (options.fileUrl) {
-            console.log(`🖥️ [TerminalTool] Executing file from URL: ${options.fileUrl}`);
+            console.log(
+              `🖥️ [TerminalTool] Executing file from URL: ${options.fileUrl}`
+            );
           } else {
             console.log(`🖥️ [TerminalTool] Executing command: ${command}`);
           }
-          
-          const result = await terminalService.executeCommand(command || '', {
+
+          const result = await terminalService.executeCommand(command || "", {
             timeout: options.timeout,
             workingDirectory: options.workingDirectory,
             environment: options.environment,
@@ -598,9 +604,15 @@ export const executeToolCall = async (
             runtime: options.runtime,
           });
 
-          console.log(`🖥️ [TerminalTool] Command completed - Success: ${result.success}, Exit Code: ${result.exitCode}`);
-          console.log(`🖥️ [TerminalTool] Execution time: ${result.executionTime}ms`);
-          console.log(`🖥️ [TerminalTool] Output length: ${result.stdout.length} chars`);
+          console.log(
+            `🖥️ [TerminalTool] Command completed - Success: ${result.success}, Exit Code: ${result.exitCode}`
+          );
+          console.log(
+            `🖥️ [TerminalTool] Execution time: ${result.executionTime}ms`
+          );
+          console.log(
+            `🖥️ [TerminalTool] Output length: ${result.stdout.length} chars`
+          );
 
           return JSON.stringify({
             ok: result.success,
@@ -659,6 +671,7 @@ export const runWithToolsIfRequested = async (
       | "none"
       | "required"
       | { type: "function"; function: { name: string } };
+    isAzure?: boolean;
   }
 ): Promise<string> => {
   const qa = AppConfigService.getInstance().getQAConfig();
@@ -674,17 +687,21 @@ export const runWithToolsIfRequested = async (
   // If tools are disabled or no tools available, do a simple call
   if (!toolEnabled) {
     console.log(`🧰 Tools disabled or unavailable. Making direct LLM call.`);
-    const resp = await client.chat.completions.create(
-      {
-        model,
 
-        messages,
-        reasoning_effort: "low",
-      },
-      {
-        signal: options?.abortSignal,
-      }
-    );
+    // Create request options - exclude reasoning_effort for Azure
+    const requestOptions: any = {
+      model,
+      messages,
+    };
+
+    // Only add reasoning_effort for non-Azure clients
+    if (!options?.isAzure) {
+      requestOptions.reasoning_effort = "low";
+    }
+
+    const resp = await client.chat.completions.create(requestOptions, {
+      signal: options?.abortSignal,
+    });
     const content = resp.choices[0]?.message?.content?.trim();
     if (!content) throw new Error("No response content from LLM");
     return content;
@@ -698,24 +715,28 @@ export const runWithToolsIfRequested = async (
 
   // Determine tool choice strategy
   const toolChoice = options?.toolChoice || "auto";
-  const maxLoops = options?.maxToolLoops ?? 5; // Reduced from 6 as per OpenAI recommendations
+  const maxLoops = options?.maxToolLoops ?? 6; // Increased for better tool usage
 
   // Main conversation loop with tool support
   for (let iteration = 0; iteration < maxLoops; iteration++) {
     console.log(`🔁 Tool loop iteration ${iteration + 1}/${maxLoops}`);
 
-    const response = await client.chat.completions.create(
-      {
-        model,
-        reasoning_effort: "low",
-        messages,
-        tools,
-        tool_choice: toolChoice,
-      },
-      {
-        signal: options?.abortSignal,
-      }
-    );
+    // Create request options - exclude reasoning_effort for Azure
+    const requestOptions: any = {
+      model,
+      messages,
+      tools,
+      tool_choice: toolChoice,
+    };
+
+    // Only add reasoning_effort for non-Azure clients
+    if (!options?.isAzure) {
+      requestOptions.reasoning_effort = "low";
+    }
+
+    const response = await client.chat.completions.create(requestOptions, {
+      signal: options?.abortSignal,
+    });
 
     const choice = response.choices[0];
     const assistantMessage = choice?.message;
@@ -731,19 +752,27 @@ export const runWithToolsIfRequested = async (
       console.warn(
         "⚠️ Assistant returned empty content. Making fallback call."
       );
+
+      // Create fallback request options - exclude reasoning_effort for Azure
+      const fallbackRequestOptions: any = {
+        model,
+        messages: [
+          ...messages,
+          {
+            role: "system",
+            content:
+              "Provide a clear, direct answer. Do not return empty content.",
+          },
+        ],
+      };
+
+      // Only add reasoning_effort for non-Azure clients
+      if (!options?.isAzure) {
+        fallbackRequestOptions.reasoning_effort = "low";
+      }
+
       const fallbackResp = await client.chat.completions.create(
-        {
-          model,
-          reasoning_effort: "low",
-          messages: [
-            ...messages,
-            {
-              role: "system",
-              content:
-                "Provide a clear, direct answer. Do not return empty content.",
-            },
-          ],
-        },
+        fallbackRequestOptions,
         {
           signal: options?.abortSignal,
         }
@@ -850,14 +879,21 @@ export const runWithToolsIfRequested = async (
   console.log(
     `⏰ Tool loop limit reached. Making final call without tool requirements.`
   );
-  const finalResponse = await client.chat.completions.create(
-    {
-      model,
-      reasoning_effort: "low",
-      messages,
 
-      // No tools or tool_choice to force a text response
-    },
+  // Create final request options - exclude reasoning_effort for Azure
+  const finalRequestOptions: any = {
+    model,
+    messages,
+    // No tools or tool_choice to force a text response
+  };
+
+  // Only add reasoning_effort for non-Azure clients
+  if (!options?.isAzure) {
+    finalRequestOptions.reasoning_effort = "low";
+  }
+
+  const finalResponse = await client.chat.completions.create(
+    finalRequestOptions,
     {
       signal: options?.abortSignal,
     }

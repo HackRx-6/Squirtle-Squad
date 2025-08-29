@@ -244,7 +244,8 @@ export class LLMService implements LLMProvider {
             cleanedUserMessage,
             {
               toolChoice: getRecommendedToolChoice(),
-              maxToolLoops: 3, // Reasonable default for production
+              maxToolLoops: 6, // Increased from 3 for better tool usage
+              isAzure: this.primaryConfig.service === "azure",
             }
           );
 
@@ -1128,7 +1129,7 @@ export class LLMService implements LLMProvider {
                 cleanedUserMessage,
                 {
                   toolChoice: getRecommendedToolChoice(),
-                  maxToolLoops: 3,
+                  maxToolLoops: 6,
                 }
               );
 

@@ -1,10 +1,9 @@
-import { runWithToolsIfRequested } from "../LLM/tools.LLM";
+import { LLMService } from "../LLM/core.LLM";
 import { Config } from "../../config";
 import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
 import { playwrightService } from "./playwright.service";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
-import OpenAI from "openai";
 
 export interface HackRXRequest {
   documents: string;
@@ -522,42 +521,28 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         cleaningApplied: true,
       });
 
-      // Get LLM config and create client directly
-      this.logger.debug("Initializing LLM client", { sessionId });
-      const aiConfig = Config.ai;
-      const llmConfig = aiConfig.getLLMConfig();
+      // Initialize LLM service that properly handles Azure/OpenAI configurations
+      this.logger.debug("Initializing LLM service", { sessionId });
+      const llmService = new LLMService();
 
-      // Create OpenAI client directly to avoid circular dependency
-      const client = new OpenAI({
-        apiKey: llmConfig.primary.apiKey,
-        baseURL: llmConfig.primary.baseURL,
-      });
-
-      this.logger.info("LLM client initialized", {
+      this.logger.info("LLM service initialized", {
         sessionId,
-        model: llmConfig.primary.model,
-        baseURL: llmConfig.primary.baseURL,
       });
 
       // Use tool-enabled LLM processing
       try {
         this.logger.info("Starting LLM processing with tools", {
           sessionId,
-          model: llmConfig.primary.model,
           maxToolLoops: 10,
         });
 
         const llmStartTime = Date.now();
-        const rawResponse = await runWithToolsIfRequested(
-          client,
-          llmConfig.primary.model,
+
+        // Use LLMService's generateResponse which handles Azure/OpenAI properly
+        // and internally uses runWithToolsIfRequested with proper client configuration
+        const rawResponse = await llmService.generateResponse(
           systemPrompt,
-          userMessage,
-          {
-            abortSignal: undefined, // We'll use timerContext for timeout handling
-            maxToolLoops: 10,
-            toolChoice: "auto", // Let the model decide when to use tools
-          }
+          userMessage
         );
 
         const llmProcessingTime = Date.now() - llmStartTime;
