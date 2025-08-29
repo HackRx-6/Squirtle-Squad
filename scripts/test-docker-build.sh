@@ -32,6 +32,15 @@ else
     exit 1
 fi
 
+# Test Playwright installation
+echo "🎭 Testing Playwright installation..."
+if docker run --rm fantastic-robo-test node -e "try { const { chromium } = require('playwright'); console.log('✅ Playwright loaded successfully'); } catch(e) { console.log('❌ Playwright error:', e.message); process.exit(1); }"; then
+    echo "✅ Playwright is working"
+else
+    echo "❌ Playwright test failed"
+    exit 1
+fi
+
 # Test if temp directory exists
 echo "📁 Testing temp directory..."
 if docker run --rm fantastic-robo-test ls -la /app/temp; then

@@ -15,7 +15,19 @@ RUN apk add --no-cache \
     nodejs \
     npm \
     libstdc++ \
-    libgcc
+    libgcc \
+    # Playwright browser dependencies
+    chromium \
+    chromium-chromedriver \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto \
+    font-noto-cjk \
+    font-noto-emoji
 
 # Install node-gyp globally to ensure proper native module building
 RUN npm install -g node-gyp
@@ -38,6 +50,10 @@ RUN bun install --frozen-lockfile --ignore-scripts
 RUN cd node_modules/hnswlib-node && \
     npm run rebuild && \
     echo "✅ hnswlib-node rebuilt successfully"
+
+# Install Playwright browsers
+RUN bunx playwright install chromium && \
+    echo "✅ Playwright browsers installed successfully"
 
 # Verify hnswlib-node installation
 RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded successfully'); } catch(e) { console.log('⚠️ hnswlib-node not available:', e.message); }"
@@ -62,7 +78,19 @@ RUN apk add --no-cache \
     make \
     build-base \
     nodejs \
-    npm
+    npm \
+    # Playwright browser dependencies
+    chromium \
+    chromium-chromedriver \
+    nss \
+    freetype \
+    freetype-dev \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto \
+    font-noto-cjk \
+    font-noto-emoji
 
 # Install node-gyp globally in production stage too
 RUN npm install -g node-gyp
@@ -73,6 +101,10 @@ WORKDIR /app
 COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/dist ./dist
 COPY --from=base /app/package.json ./
+
+# Install Playwright browsers in production
+RUN bunx playwright install chromium && \
+    echo "✅ Playwright browsers installed in production"
 
 # Verify that the native module was copied correctly
 RUN ls -la node_modules/hnswlib-node/build/ || echo "No build directory found"
@@ -107,6 +139,10 @@ RUN mkdir -p logs
 # Environment
 ENV NODE_ENV=production
 ENV PORT=3000
+# Playwright configuration
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 
 EXPOSE 3000
 

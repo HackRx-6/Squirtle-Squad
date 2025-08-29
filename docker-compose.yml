@@ -1,91 +1,91 @@
 services:
-    # Python PDF/PPTX Extraction Service
-    pdf-service:
-        build:
-            context: ./python-pdf-service
-            dockerfile: Dockerfile
-        ports:
-            - "8000:8000"
-        environment:
-            # Mistral API key for PPTX OCR processing
-            - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-        healthcheck:
-            test:
-                [
-                    "CMD",
-                    "python",
-                    "-c",
-                    "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
-                ]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 10s
-        restart: unless-stopped
-        mem_limit: 1g
-        mem_reservation: 512m
-        networks:
-            - app-network
+  # Python PDF/PPTX Extraction Service
+  pdf-service:
+    build:
+      context: ./python-pdf-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Mistral API key for PPTX OCR processing
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    mem_limit: 1g
+    mem_reservation: 512m
+    networks:
+      - app-network
 
-    # Main Bun Application
-    fantastic-robo:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        ports:
-            - "${PORT:-3000}:3000"
-        depends_on:
-            pdf-service:
-                condition: service_healthy
-        environment:
-            - NODE_ENV=production
-            - PORT=3000
-            # Python Service Configuration
-            - PYTHON_SERVICE_URL=${PYTHON_SERVICE_URL}
-            # Load from .env file
-            - EMBEDDINGS_MODEL_API_KEY=${EMBEDDINGS_MODEL_API_KEY}
-            - EMBEDDINGS_MODEL_ENDPOINT=${EMBEDDINGS_MODEL_ENDPOINT}
-            - EMBEDDINGS_MODEL_DEPLOYMENT_NAME=${EMBEDDINGS_MODEL_DEPLOYMENT_NAME}
-            - EMBEDDINGS_MODEL_API_VERSION=${EMBEDDINGS_MODEL_API_VERSION}
-            - EMBEDDINGS_MODEL_API_KEY_2=${EMBEDDINGS_MODEL_API_KEY_2}
-            - EMBEDDINGS_MODEL_ENDPOINT_2=${EMBEDDINGS_MODEL_ENDPOINT_2}
-            - EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2=${EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2}
-            - EMBEDDINGS_MODEL_API_VERSION_2=${EMBEDDINGS_MODEL_API_VERSION_2}
-            - LLM_API_KEY=${LLM_API_KEY}
-            - LLM_BASE_URL=${LLM_BASE_URL}
-            - LLM_MODEL=${LLM_MODEL}
-            - LLM_DEPLOYMENT_NAME=${LLM_DEPLOYMENT_NAME}
-            - LLM_SERVICE=${LLM_SERVICE}
-            - LLM_API_VERSION=${LLM_API_VERSION}
-            - LLM_API_KEY_2=${LLM_API_KEY}
-            - LLM_BASE_URL_2=${LLM_BASE_URL}
-            - LLM_MODEL_2=${LLM_MODEL}
-            - LLM_DEPLOYMENT_NAME_2=${LLM_DEPLOYMENT_NAME}
-            - LLM_SERVICE_2=${LLM_SERVICE}
-            - LLM_API_VERSION_2=${LLM_API_VERSION}
-            - HACKRX_AUTH_TOKEN=${HACKRX_AUTH_TOKEN}
-            - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-            - SENTRY_DSN=${SENTRY_DSN}
-            - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
-            - SENTRY_RELEASE=${SENTRY_RELEASE}
-            - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE}
-            - SENTRY_ENABLE_TRACING=${SENTRY_ENABLE_TRACING}
-            - PDF_SERVICE_URL=http://pdf-service:8000
-            - USE_PYTHON_PDF=true
-        volumes:
-            - ./logs:/app/logs
-        restart: unless-stopped
-        healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:3000/healthcheck"]
-            interval: 30s
-            timeout: 10s
-            retries: 3
-            start_period: 30s
-        mem_limit: 2g
-        mem_reservation: 1g
-        networks:
-            - app-network
+  # Main Bun Application
+  fantastic-robo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      pdf-service:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Python Service Configuration
+      - PYTHON_SERVICE_URL=${PYTHON_SERVICE_URL}
+      # Load from .env file
+      - EMBEDDINGS_MODEL_API_KEY=${EMBEDDINGS_MODEL_API_KEY}
+      - EMBEDDINGS_MODEL_ENDPOINT=${EMBEDDINGS_MODEL_ENDPOINT}
+      - EMBEDDINGS_MODEL_DEPLOYMENT_NAME=${EMBEDDINGS_MODEL_DEPLOYMENT_NAME}
+      - EMBEDDINGS_MODEL_API_VERSION=${EMBEDDINGS_MODEL_API_VERSION}
+      - EMBEDDINGS_MODEL_API_KEY_2=${EMBEDDINGS_MODEL_API_KEY_2}
+      - EMBEDDINGS_MODEL_ENDPOINT_2=${EMBEDDINGS_MODEL_ENDPOINT_2}
+      - EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2=${EMBEDDINGS_MODEL_DEPLOYMENT_NAME_2}
+      - EMBEDDINGS_MODEL_API_VERSION_2=${EMBEDDINGS_MODEL_API_VERSION_2}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_MODEL=${LLM_MODEL}
+      - LLM_DEPLOYMENT_NAME=${LLM_DEPLOYMENT_NAME}
+      - LLM_SERVICE=${LLM_SERVICE}
+      - LLM_API_VERSION=${LLM_API_VERSION}
+      - LLM_API_KEY_2=${LLM_API_KEY}
+      - LLM_BASE_URL_2=${LLM_BASE_URL}
+      - LLM_MODEL_2=${LLM_MODEL}
+      - LLM_DEPLOYMENT_NAME_2=${LLM_DEPLOYMENT_NAME}
+      - LLM_SERVICE_2=${LLM_SERVICE}
+      - LLM_API_VERSION_2=${LLM_API_VERSION}
+      - HACKRX_AUTH_TOKEN=${HACKRX_AUTH_TOKEN}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT}
+      - SENTRY_RELEASE=${SENTRY_RELEASE}
+      - SENTRY_TRACES_SAMPLE_RATE=${SENTRY_TRACES_SAMPLE_RATE}
+      - SENTRY_ENABLE_TRACING=${SENTRY_ENABLE_TRACING}
+      - PDF_SERVICE_URL=http://pdf-service:8000
+      - USE_PYTHON_PDF=true
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    mem_limit: 3g
+    mem_reservation: 1.5g
+    networks:
+      - app-network
 
 networks:
-    app-network:
-        driver: bridge
+  app-network:
+    driver: bridge
