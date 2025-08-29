@@ -738,13 +738,14 @@ export const pdfController = {
 
           // Create simplified request body representation for logging
           requestBodyForLogging = {
-            pdf: fileEntry && fileEntry instanceof File
-              ? {
-                  name: fileEntry.name || "uploaded-file.pdf",
-                  size: fileEntry.size || 0,
-                  type: fileEntry.type || "unknown",
-                }
-              : null,
+            pdf:
+              fileEntry && fileEntry instanceof File
+                ? {
+                    name: fileEntry.name || "uploaded-file.pdf",
+                    size: fileEntry.size || 0,
+                    type: fileEntry.type || "unknown",
+                  }
+                : null,
             questions: questionsEntry || null,
           };
 
@@ -758,7 +759,7 @@ export const pdfController = {
           if (!(fileEntry instanceof File)) {
             throw new ApiError(
               400,
-              'Invalid file format. Please provide a valid file.'
+              "Invalid file format. Please provide a valid file."
             );
           }
 
