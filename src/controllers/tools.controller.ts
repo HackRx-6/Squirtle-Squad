@@ -10,11 +10,16 @@ import { validateAuthToken } from "../middlewares/auth.middleware";
 
 export const toolsController = {
   async runHackRX(request: Request): Promise<Response> {
-    console.log("🚀 =================== HACKRX REQUEST START ===================");
+    console.log(
+      "🚀 =================== HACKRX REQUEST START ==================="
+    );
     console.log(`🚀 Request URL: ${request.url}`);
     console.log(`🚀 Request Method: ${request.method}`);
-    console.log(`🚀 Request Headers:`, Object.fromEntries(request.headers.entries()));
-    
+    console.log(
+      `🚀 Request Headers:`,
+      Object.fromEntries(request.headers.entries())
+    );
+
     // Start global timer immediately when API is hit
     const timerContext = globalTimerService.startTimer(
       `tools_hackrx_${Date.now()}`
@@ -163,25 +168,41 @@ export const toolsController = {
             headers: { "Content-Type": "application/json" },
           });
         } catch (error: any) {
-          console.error("❌ =================== HACKRX ERROR DEBUG ===================");
-          console.error("❌ Error Type:", error?.constructor?.name || typeof error);
+          console.error(
+            "❌ =================== HACKRX ERROR DEBUG ==================="
+          );
+          console.error(
+            "❌ Error Type:",
+            error?.constructor?.name || typeof error
+          );
           console.error("❌ Error Message:", error?.message || error);
           console.error("❌ Error Code:", error?.code);
           console.error("❌ Error Status:", error?.status);
           console.error("❌ Error Response:", error?.response);
           console.error("❌ Error Stack:", error?.stack);
-          console.error("❌ Full Error Object:", JSON.stringify(error, null, 2));
-          console.error("❌ =================== HACKRX ERROR DEBUG END ===================");
+          console.error(
+            "❌ Full Error Object:",
+            JSON.stringify(error, null, 2)
+          );
+          console.error(
+            "❌ =================== HACKRX ERROR DEBUG END ==================="
+          );
 
           // Check if this is a 403 error specifically
-          if (error?.status === 403 || error?.message?.includes("403") || error?.message?.includes("Forbidden")) {
+          if (
+            error?.status === 403 ||
+            error?.message?.includes("403") ||
+            error?.message?.includes("Forbidden")
+          ) {
             console.error("🔥 403 FORBIDDEN ERROR DETECTED!");
-            console.error("🔥 This is likely the source of the 'Forbidden: Invalid or missing authentication token' error");
+            console.error(
+              "🔥 This is likely the source of the 'Forbidden: Invalid or missing authentication token' error"
+            );
             console.error("🔥 Error details:", {
               status: error?.status,
               message: error?.message,
               response: error?.response,
-              stack: error?.stack?.split('\n').slice(0, 5) // First 5 lines of stack
+              stack: error?.stack?.split("\n").slice(0, 5), // First 5 lines of stack
             });
           }
 
@@ -195,8 +216,8 @@ export const toolsController = {
                 debug_info: {
                   error_constructor: error.constructor.name,
                   error_status: error.statusCode,
-                  error_stack: error.stack?.split('\n').slice(0, 3)
-                }
+                  error_stack: error.stack?.split("\n").slice(0, 3),
+                },
               }),
               {
                 status: error.statusCode,
@@ -209,7 +230,8 @@ export const toolsController = {
           return new Response(
             JSON.stringify({
               answers: [
-                error?.message || "An unexpected error occurred while processing the tools request",
+                error?.message ||
+                  "An unexpected error occurred while processing the tools request",
               ],
               error_type: "internal_error",
               elapsed_seconds: (Date.now() - timerContext.startTime) / 1000,
@@ -217,8 +239,8 @@ export const toolsController = {
                 error_type: error?.constructor?.name || typeof error,
                 error_code: error?.code,
                 error_status: error?.status,
-                has_response: !!error?.response
-              }
+                has_response: !!error?.response,
+              },
             }),
             {
               status: 500,

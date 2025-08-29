@@ -165,20 +165,20 @@ export class EnhancedWebScrapingService {
       case "aggressive":
         cleanedText = TextCleaningService.cleanText(cleanedHtml, {
           enablePromptInjectionProtection: true,
-          strictSanitization: true
+          strictSanitization: true,
         });
         break;
       case "conservative":
         cleanedText = TextCleaningService.cleanText(cleanedHtml, {
           enablePromptInjectionProtection: true,
-          strictSanitization: false
+          strictSanitization: false,
         });
         break;
       case "balanced":
       default:
         cleanedText = TextCleaningService.cleanText(cleanedHtml, {
           enablePromptInjectionProtection: true,
-          strictSanitization: false
+          strictSanitization: false,
         });
         break;
     }
