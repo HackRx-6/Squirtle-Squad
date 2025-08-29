@@ -60,9 +60,9 @@ RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded
 
 # Copy source code and build (excluding native modules from bundle)
 COPY . .
-RUN bun build src/index.ts --outdir ./dist --target bun --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --splitting
+RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --splitting
 
-# Production stage - use Bun for production
+# Production stage - keep build tools for native modules
 FROM oven/bun:1.1.38-alpine
 
 # Runtime packages including build tools for native modules (Python needed for node-gyp)
@@ -77,6 +77,8 @@ RUN apk add --no-cache \
     g++ \
     make \
     build-base \
+    nodejs \
+    npm \
     # Playwright browser dependencies
     chromium \
     chromium-chromedriver \
@@ -126,7 +128,7 @@ RUN ARCH=$(uname -m) && \
 
 # Verify the rebuilt native module exists
 RUN ls -la node_modules/hnswlib-node/build/ && \
-    bun -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded successfully in production stage'); } catch(e) { console.log('❌ hnswlib-node error in production stage:', e.message); }"
+    node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded successfully in production stage'); } catch(e) { console.log('❌ hnswlib-node error in production stage:', e.message); }"
 
 # Copy source files needed at runtime
 COPY src ./src
@@ -148,4 +150,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:3000/healthcheck || exit 1
 
-CMD ["bun", "run", "dist/index.js"]
+CMD ["bun", "run", "start"]
