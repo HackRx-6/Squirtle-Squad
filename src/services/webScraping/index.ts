@@ -242,7 +242,7 @@ export const webContextService = WebContextService.getInstance();
 export { urlDetectionService as urlDetection } from "./urlDetection.webScraping";
 export { coreWebScrapingService } from "./coreWebScraping.webScraping";
 export { linkedContentCache } from "./linkedContentCache.webScraping";
-export { webQAService } from "./webQA.webScraping";
+export { webQAService as webQA } from "./webQA.webScraping";
 export { enhancedWebScrapingService } from "./enhanced.webScraping";
 
 // Export types

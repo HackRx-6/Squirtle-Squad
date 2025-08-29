@@ -4,7 +4,7 @@ import { sentryMonitoringService } from "../services/monitoring";
 
 import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
-import { webQAService } from "../services/webScraping";
+import { webQA as webQAService } from "../services/webScraping";
 import { hackrxService } from "../services/webAutomation";
 import { validateAuthToken } from "../middlewares/auth.middleware";
 
