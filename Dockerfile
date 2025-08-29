@@ -17,6 +17,7 @@ RUN apk add --no-cache \
     libstdc++ \
     libgcc \
     git \
+    bash \
     # Playwright browser dependencies
     chromium \
     chromium-chromedriver \
@@ -81,6 +82,7 @@ RUN apk add --no-cache \
     nodejs \
     npm \
     git \
+    bash \
     # Playwright browser dependencies
     chromium \
     chromium-chromedriver \
@@ -143,7 +145,7 @@ RUN chmod +x scripts/*.sh
 RUN mkdir -p logs
 
 # Set up Git configuration
-RUN ./scripts/setup-git.sh
+RUN bash ./scripts/setup-git.sh
 
 # Set up Git remote (you'll need to replace with your actual repository URL)
 # Note: This requires authentication - see deployment guide for setting up credentials
