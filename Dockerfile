@@ -1,5 +1,5 @@
 # Multi-stage build optimized for CI/CD with hnswlib-node support
-FROM oven/bun:1.1.38-alpine AS base
+FROM oven/bun:1.2.21-alpine AS base
 
 # Essential Alpine packages for native modules compilation (hnswlib-node requires Python for node-gyp)
 RUN apk add --no-cache \
@@ -62,8 +62,8 @@ RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded
 COPY . .
 RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --external pdfjs-dist --external unpdf --splitting
 
-# Production stage - keep build tools for native modules
-FROM oven/bun:1.1.38-alpine
+# Production stage - use Bun for production
+FROM oven/bun:1.2.21-alpine
 
 # Runtime packages including build tools for native modules (Python needed for node-gyp)
 RUN apk add --no-cache \

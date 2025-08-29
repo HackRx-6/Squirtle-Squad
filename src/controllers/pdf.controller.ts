@@ -185,7 +185,7 @@ export const pdfController = {
 
             // Prepare web context (include the documents URL in the question text so it gets picked up)
             const { webContextService } = await import(
-              "../services/webScraping"
+              "../services/webScraping/webContext.webScraping"
             );
 
             const augmentedQuestions = questions.map(

@@ -9,8 +9,8 @@ import { FANTASTIC_ROBO_SYSTEM_PROMPT } from "../../prompts/prompt8";
 import { TOOL_AWARE_SYSTEM_PROMPT_ENHANCED } from "../../prompts/prompts";
 import {
   urlDetection as urlDetectionService,
-  webContextService,
 } from "../webScraping";
+import { webContextService } from "../webScraping/webContext.webScraping";
 import type { DocumentChunk, QuestionAnswer } from "../../types/document.types";
 import type { TimerContext } from "../timer";
 
