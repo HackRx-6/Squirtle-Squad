@@ -6,6 +6,7 @@ import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
 import { webQAService } from "../services/webScraping";
 import { hackrxService } from "../services/webAutomation";
+import { validateAuthToken } from "../middlewares/auth.middleware";
 
 export const toolsController = {
   async runHackRX(request: Request): Promise<Response> {
@@ -476,7 +477,7 @@ export const toolsController = {
           }
 
           // Validate required fields
-          const { url, questions, cleaningOptions } = body;
+          const { url, questions, cleaningOptions, documents } = body;
 
           if (!documents) {
             throw new ApiError(400, "Missing required field: documents");
