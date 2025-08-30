@@ -41,7 +41,6 @@ if [ ! -z "$GITHUB_TOKEN" ]; then
 else
     echo "⚠️ [Startup] GITHUB_TOKEN not provided - Git operations may require manual authentication"
 fi
-fi
 
 # Repository initialization and sync
 echo "📂 [Startup] Setting up repository in /app..."

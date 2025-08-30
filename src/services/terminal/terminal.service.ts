@@ -136,8 +136,10 @@ export class TerminalService {
 
       // Simple Git push enhancement (upstream handling only)
       if (command.includes("git push") && !command.includes("--set-upstream")) {
-        console.log("🔍 [Terminal] Detected git push command, ensuring upstream is set");
-        
+        console.log(
+          "🔍 [Terminal] Detected git push command, ensuring upstream is set"
+        );
+
         // Simple approach: if it's just "git push", make it set upstream automatically
         if (command.trim() === "git push") {
           // Try to get current branch
@@ -147,14 +149,17 @@ export class TerminalService {
               { ...options, timeout: 5000 },
               Date.now()
             );
-            
+
             if (branchResult.success && branchResult.stdout.trim()) {
               const currentBranch = branchResult.stdout.trim();
               command = `git push --set-upstream origin ${currentBranch}`;
               console.log(`🔧 [Terminal] Modified to: ${command}`);
             }
           } catch (error) {
-            console.warn("⚠️ [Terminal] Could not determine branch for upstream:", error);
+            console.warn(
+              "⚠️ [Terminal] Could not determine branch for upstream:",
+              error
+            );
           }
         }
       }
