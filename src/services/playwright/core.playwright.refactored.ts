@@ -4,10 +4,10 @@ import type {
   WebAutomationRequest,
   WebAutomationResult,
 } from "./types";
-import { BrowserManager } from "./browserManager.playwright";
-import { ActionExecutor } from "./actionExecutor.playwright";
-import { ContentExtractor } from "./contentExtractor.playwright";
-import { SessionManager } from "./sessionManager.playwright";
+import { BrowserManager } from "./browser.manager";
+import { ActionExecutor } from "./action.executor";
+import { ContentExtractor } from "./content.extractor";
+import { SessionManager } from "./session.manager";
 import { loggingService } from "../logging";
 import { sentryMonitoringService } from "../monitoring";
 

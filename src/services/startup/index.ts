@@ -1,5 +1,5 @@
 import { loggingService } from "../logging";
-import { playwrightService } from "../playwright/core.playwright";
+import { playwrightService } from "../playwright";
 
 export class StartupService {
   private static instance: StartupService;

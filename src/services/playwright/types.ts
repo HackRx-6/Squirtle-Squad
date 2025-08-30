@@ -38,6 +38,21 @@ export interface PlaywrightServiceConfig {
   maxConcurrentPages: number;
 }
 
+export interface HTMLCleaningOptions {
+  /** Whether to include JavaScript that contains important operations */
+  includeImportantJS?: boolean;
+  /** Whether to preserve CSS for styling context */
+  preserveCSS?: boolean;
+  /** Whether to include data attributes */
+  includeDataAttributes?: boolean;
+  /** Whether to include ARIA attributes for accessibility */
+  includeAriaAttributes?: boolean;
+  /** Maximum size of individual script blocks to include (in characters) */
+  maxScriptSize?: number;
+  /** Whether to include inline event handlers */
+  includeEventHandlers?: boolean;
+}
+
 export interface WebAutomationRequest {
   url: string;
   actions: WebAutomationAction[];
@@ -53,14 +68,7 @@ export interface WebAutomationRequest {
       includeHTML?: boolean;
       includeInteractiveElements?: boolean;
       maxContentSize?: number;
-      htmlCleaningOptions?: {
-        includeImportantJS?: boolean;
-        preserveCSS?: boolean;
-        includeDataAttributes?: boolean;
-        includeAriaAttributes?: boolean;
-        maxScriptSize?: number;
-        includeEventHandlers?: boolean;
-      };
+      htmlCleaningOptions?: HTMLCleaningOptions;
     };
   };
 }

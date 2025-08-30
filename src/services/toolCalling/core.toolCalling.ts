@@ -1,7 +1,7 @@
 import { LLMService } from "../LLM/core.LLM";
 import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
-import { playwrightService } from "../playwright/core.playwright";
+import { playwrightService } from "../playwright";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 import type {
   ToolCallingRequest,
