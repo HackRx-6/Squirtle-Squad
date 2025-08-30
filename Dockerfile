@@ -119,18 +119,9 @@ COPY scripts ./scripts
 # Make scripts executable and create logs directory
 RUN chmod +x scripts/*.sh && mkdir -p logs
 
-# Create entrypoint script that runs Git setup and then starts the app
-RUN echo '#!/bin/sh\n\
-echo "🚀 [Container] Starting with Git setup..."\n\
-if [ -f "/app/scripts/setup-git.sh" ]; then\n\
-  echo "📋 [Container] Running Git setup..."\n\
-  /app/scripts/setup-git.sh || echo "⚠️ [Container] Git setup failed, continuing..."\n\
-else\n\
-  echo "⚠️ [Container] Git setup script not found"\n\
-fi\n\
-echo "🌟 [Container] Starting main application..."\n\
-exec "$@"' > /usr/local/bin/docker-entrypoint.sh && \
-    chmod +x /usr/local/bin/docker-entrypoint.sh
+# Copy and setup entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Environment configuration
 ENV NODE_ENV=production
