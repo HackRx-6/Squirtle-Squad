@@ -231,7 +231,7 @@ jobs:
               -e LLM_SERVICE="${{ secrets.LLM_SERVICE }}" \
               -e LLM_API_VERSION="${{ secrets.LLM_API_VERSION }}" \
               -e HACKRX_AUTH_TOKEN="${{ secrets.HACKRX_AUTH_TOKEN }}" \
-              -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+              -e GITHUB_TOKEN="${{ secrets.PERSONAL_TOKEN }}" \
               -e GIT_USER_EMAIL="ai@hackrx.com" \
               -e GIT_USER_NAME="AI Assistant" \
               -e GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git" \
@@ -249,7 +249,7 @@ jobs:
               -e PORT=3000 \
               -e PDF_SERVICE_URL=http://$PYTHON_CONTAINER:8000 \
               -e USE_PYTHON_PDF=true \
-              -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+              -e GITHUB_TOKEN="${{ secrets.PERSONAL_TOKEN }}" \
               -e GIT_USER_EMAIL="ai@hackrx.com" \
               -e GIT_USER_NAME="AI Assistant" \
               -e GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git" \

@@ -134,76 +134,27 @@ export class TerminalService {
         changed: originalCommand !== cleanedCommand,
       });
 
-      // Special handling for Git commands that need authentication
-      if (
-        command.includes("git") &&
-        (command.includes("push") ||
-          command.includes("pull") ||
-          command.includes("fetch") ||
-          command.includes("clone"))
-      ) {
-        console.log(
-          "🔍 [Terminal] Detected Git command requiring authentication"
-        );
-
-        // Ensure Git authentication is properly configured
-        try {
-          await this.configureGitAuth(options);
-        } catch (error) {
-          console.warn(
-            "⚠️ [Terminal] Failed to configure Git authentication:",
-            error
-          );
-        }
-
-        // Special handling for push commands
-        if (
-          command.includes("git push") &&
-          !command.includes("--set-upstream")
-        ) {
-          console.log(
-            "🔍 [Terminal] Detected git push command, checking for upstream issues"
-          );
-
-          // Try to get current branch and check if upstream is configured
+      // Simple Git push enhancement (upstream handling only)
+      if (command.includes("git push") && !command.includes("--set-upstream")) {
+        console.log("🔍 [Terminal] Detected git push command, ensuring upstream is set");
+        
+        // Simple approach: if it's just "git push", make it set upstream automatically
+        if (command.trim() === "git push") {
+          // Try to get current branch
           try {
             const branchResult = await this.executeCommandInternal(
               "git branch --show-current",
               { ...options, timeout: 5000 },
               Date.now()
             );
-
+            
             if (branchResult.success && branchResult.stdout.trim()) {
               const currentBranch = branchResult.stdout.trim();
-              console.log(`🌿 [Terminal] Current branch: ${currentBranch}`);
-
-              // Check if upstream is configured
-              const upstreamResult = await this.executeCommandInternal(
-                `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
-                { ...options, timeout: 5000 },
-                Date.now()
-              );
-
-              if (!upstreamResult.success) {
-                console.log(
-                  "⚠️ [Terminal] No upstream configured, modifying push command"
-                );
-                // Modify the command to set upstream
-                if (command === "git push") {
-                  command = `git push --set-upstream origin ${currentBranch}`;
-                  console.log(`🔧 [Terminal] Modified command: ${command}`);
-                }
-              } else {
-                console.log(
-                  `✅ [Terminal] Upstream already configured: ${upstreamResult.stdout.trim()}`
-                );
-              }
+              command = `git push --set-upstream origin ${currentBranch}`;
+              console.log(`🔧 [Terminal] Modified to: ${command}`);
             }
           } catch (error) {
-            console.warn(
-              "⚠️ [Terminal] Could not check Git upstream configuration:",
-              error
-            );
+            console.warn("⚠️ [Terminal] Could not determine branch for upstream:", error);
           }
         }
       }
@@ -597,57 +548,6 @@ export class TerminalService {
    */
   public updateConfig(newConfig: Partial<TerminalServiceConfig>) {
     this.config = { ...this.config, ...newConfig };
-  }
-
-  /**
-   * Configure Git authentication using GitHub token
-   */
-  private async configureGitAuth(
-    options: TerminalExecutionOptions
-  ): Promise<void> {
-    const githubToken = process.env.GITHUB_TOKEN;
-
-    if (!githubToken) {
-      console.warn(
-        "⚠️ [Terminal] GITHUB_TOKEN not found, Git authentication may fail"
-      );
-      return;
-    }
-
-    console.log(
-      "🔐 [Terminal] Configuring Git authentication with GitHub token"
-    );
-
-    try {
-      // Configure Git credential helper to use store
-      await this.executeCommandInternal(
-        "git config credential.helper 'store --file=/tmp/.git-credentials'",
-        { ...options, timeout: 5000 },
-        Date.now()
-      );
-
-      // Configure URL rewriting for GitHub to automatically use the token
-      await this.executeCommandInternal(
-        `git config url."https://${githubToken}@github.com/".insteadOf "https://github.com/"`,
-        { ...options, timeout: 5000 },
-        Date.now()
-      );
-
-      // Create credentials file with proper permissions
-      const fs = await import("fs");
-      const credentialContent = `https://${githubToken}@github.com\n`;
-      fs.writeFileSync("/tmp/.git-credentials", credentialContent, {
-        mode: 0o600,
-      });
-
-      console.log("✅ [Terminal] Git authentication configured successfully");
-    } catch (error) {
-      console.error(
-        "❌ [Terminal] Failed to configure Git authentication:",
-        error
-      );
-      throw error;
-    }
   }
 }
 
