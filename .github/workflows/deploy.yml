@@ -58,11 +58,11 @@ jobs:
         include:
           - name: main-app
             context: .
-            image: ${{ env.IMAGE_NAME }}
+            image: hackrx-6/squirtle-squad
             dockerfile: Dockerfile
           - name: python-service
             context: ./python-pdf-service
-            image: ${{ env.PYTHON_IMAGE_NAME }}
+            image: hackrx-6/squirtle-squad-python-pdf
             dockerfile: Dockerfile
 
     steps:
