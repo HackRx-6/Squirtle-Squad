@@ -1,17 +1,124 @@
 import type { Page, Locator } from "playwright";
 import { loggingService } from "../logging";
 
-export interface ElementFindOptions {
-  timeout?: number;
-  exact?: boolean;
-  caseSensitive?: boolean;
-  retryStrategies?: ElementFindStrategy[];
-}
+/**
+ * Structured element selector configuration for LLM-generated instructions
+ *
+ * @example Basic button selector:
+ * {
+ *   "type": "button",
+ *   "identifier": {
+ *     "text": "Submit Form"
+ *   },
+ *   "fallbacks": [
+ *     { "attributes": { "type": "submit" } },
+ *     { "role": "button", "text": "Submit" }
+ *   ]
+ * }
+ *
+ * @example Complex form input:
+ * {
+ *   "type": "input",
+ *   "identifier": {
+ *     "name": "email",
+ *     "placeholder": "Enter your email"
+ *   },
+ *   "fallbacks": [
+ *     { "attributes": { "type": "email" } },
+ *     { "label": "Email Address" }
+ *   ]
+ * }
+ *
+ * @example Navigation link:
+ * {
+ *   "type": "link",
+ *   "identifier": {
+ *     "text": "About Us",
+ *     "href": "/about"
+ *   },
+ *   "context": {
+ *     "parent": "nav",
+ *     "position": "header"
+ *   }
+ * }
+ */
+export interface StructuredElementSelector {
+  /** Primary element type (button, input, link, div, etc.) */
+  type: string;
 
-export interface ElementFindStrategy {
-  name: string;
-  selector: string;
-  priority: number;
+  /** Primary identification strategy - at least one property required */
+  identifier: {
+    /** Exact text content */
+    text?: string;
+    /** Partial text match */
+    textContains?: string;
+    /** Element ID */
+    id?: string;
+    /** Name attribute */
+    name?: string;
+    /** Placeholder text */
+    placeholder?: string;
+    /** ARIA label */
+    ariaLabel?: string;
+    /** Data test ID */
+    testId?: string;
+    /** Class name (exact) */
+    className?: string;
+    /** Class contains */
+    classContains?: string;
+    /** Custom attributes */
+    attributes?: Record<string, string>;
+    /** Element role */
+    role?: string;
+    /** Link href */
+    href?: string;
+    /** Image alt text */
+    alt?: string;
+  };
+
+  /** Fallback strategies if primary identifier fails */
+  fallbacks?: Array<{
+    text?: string;
+    textContains?: string;
+    id?: string;
+    name?: string;
+    placeholder?: string;
+    ariaLabel?: string;
+    testId?: string;
+    className?: string;
+    classContains?: string;
+    attributes?: Record<string, string>;
+    role?: string;
+    href?: string;
+    alt?: string;
+    label?: string; // Associated label text
+  }>;
+
+  /** Context for more precise targeting */
+  context?: {
+    /** Parent element type or selector */
+    parent?: string;
+    /** Position context (header, footer, sidebar, main) */
+    position?: string;
+    /** Sibling elements */
+    siblings?: string[];
+    /** Index if multiple similar elements */
+    index?: number;
+  };
+
+  /** Advanced options */
+  options?: {
+    /** Wait timeout in milliseconds */
+    timeout?: number;
+    /** Must be visible */
+    visible?: boolean;
+    /** Must be enabled */
+    enabled?: boolean;
+    /** Exact text match */
+    exact?: boolean;
+    /** Case sensitive matching */
+    caseSensitive?: boolean;
+  };
 }
 
 export interface ElementFindResult {
@@ -19,448 +126,462 @@ export interface ElementFindResult {
   strategy: string;
   selector: string;
   found: boolean;
+  confidence: number; // 0-100 confidence score
 }
 
 /**
- * Generic element finder with multiple strategies for robust element location
+ * Structured JSON-based element finder for robust LLM-driven web automation
+ *
+ * Supports structured selectors that LLMs can generate consistently, providing
+ * multiple fallback strategies and context-aware element location.
  */
 export class ElementFinder {
-  private logger = loggingService.createComponentLogger("ElementFinder");
+  private logger = loggingService.createComponentLogger(
+    "StructuredElementFinder"
+  );
 
   /**
-   * Find an element using multiple intelligent strategies
+   * Find an element using structured JSON selector configuration
+   *
+   * @param page - Playwright page instance
+   * @param selectorConfig - Structured selector configuration
+   * @returns Element find result with confidence score
    */
   async findElement(
     page: Page,
-    identifier: string,
-    options: ElementFindOptions = {}
+    selectorConfig: StructuredElementSelector
   ): Promise<ElementFindResult> {
-    const {
-      timeout = 10000,
-      exact = false,
-      caseSensitive = false,
-      retryStrategies,
-    } = options;
+    const timeout = selectorConfig.options?.timeout || 10000;
 
-    this.logger.info(`Finding element with identifier: ${identifier}`, {
-      timeout,
-      exact,
-      caseSensitive,
+    this.logger.info("Finding element with structured selector", {
+      type: selectorConfig.type,
+      identifier: selectorConfig.identifier,
+      context: selectorConfig.context,
     });
 
-    // Generate strategies based on identifier
-    const strategies = retryStrategies || this.generateStrategies(identifier, { exact, caseSensitive });
+    // Try primary identifier first
+    const primaryResult = await this.trySelector(
+      page,
+      selectorConfig,
+      selectorConfig.identifier,
+      "primary"
+    );
+    if (primaryResult.found) {
+      return { ...primaryResult, confidence: 95 };
+    }
 
-    // Sort strategies by priority (higher priority first)
-    strategies.sort((a, b) => b.priority - a.priority);
-
-    for (const strategy of strategies) {
-      try {
-        this.logger.debug(`Trying strategy: ${strategy.name}`, {
-          selector: strategy.selector,
-          priority: strategy.priority,
-        });
-
-        const element = page.locator(strategy.selector);
-        
-        // Check if element exists and is visible
-        await element.waitFor({ state: 'visible', timeout: 3000 });
-        
-        this.logger.info(`Element found using strategy: ${strategy.name}`, {
-          selector: strategy.selector,
-        });
-
-        return {
-          element,
-          strategy: strategy.name,
-          selector: strategy.selector,
-          found: true,
-        };
-      } catch (error) {
-        this.logger.debug(`Strategy failed: ${strategy.name}`, {
-          selector: strategy.selector,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        continue;
+    // Try fallback strategies
+    if (selectorConfig.fallbacks) {
+      for (let i = 0; i < selectorConfig.fallbacks.length; i++) {
+        const fallback = selectorConfig.fallbacks[i];
+        const fallbackResult = await this.trySelector(
+          page,
+          selectorConfig,
+          fallback,
+          `fallback-${i + 1}`
+        );
+        if (fallbackResult.found) {
+          return { ...fallbackResult, confidence: Math.max(85 - i * 10, 50) };
+        }
       }
     }
 
-    // If no strategy worked, return a failed result
-    this.logger.warn(`No element found for identifier: ${identifier}`);
+    // Final attempt with relaxed matching
+    const relaxedResult = await this.tryRelaxedMatching(page, selectorConfig);
+    if (relaxedResult.found) {
+      return { ...relaxedResult, confidence: 30 };
+    }
+
+    this.logger.warn("No element found with structured selector", {
+      selectorConfig,
+    });
     return {
-      element: page.locator('not-found'),
-      strategy: 'none',
-      selector: identifier,
+      element: page.locator("not-found"),
+      strategy: "none",
+      selector: JSON.stringify(selectorConfig),
       found: false,
+      confidence: 0,
     };
   }
 
   /**
-   * Find multiple elements matching criteria
+   * Find multiple elements using structured selector
    */
   async findElements(
     page: Page,
-    identifier: string,
-    options: ElementFindOptions = {}
+    selectorConfig: StructuredElementSelector
   ): Promise<ElementFindResult[]> {
-    const strategies = options.retryStrategies || this.generateStrategies(identifier, options);
     const results: ElementFindResult[] = [];
 
-    for (const strategy of strategies) {
-      try {
-        const elements = page.locator(strategy.selector);
-        const count = await elements.count();
+    // Build selector and find all matching elements
+    const selector = this.buildSelector(
+      selectorConfig.type,
+      selectorConfig.identifier,
+      selectorConfig.context
+    );
 
-        if (count > 0) {
-          for (let i = 0; i < count; i++) {
-            results.push({
-              element: elements.nth(i),
-              strategy: strategy.name,
-              selector: `${strategy.selector}:nth-child(${i + 1})`,
-              found: true,
-            });
-          }
-        }
-      } catch (error) {
-        this.logger.debug(`Strategy failed for multiple elements: ${strategy.name}`, {
-          error: error instanceof Error ? error.message : String(error),
+    try {
+      const elements = page.locator(selector);
+      const count = await elements.count();
+
+      for (let i = 0; i < count; i++) {
+        results.push({
+          element: elements.nth(i),
+          strategy: "multi-element",
+          selector: `${selector}:nth(${i})`,
+          found: true,
+          confidence: 85,
         });
       }
+    } catch (error) {
+      this.logger.debug("Failed to find multiple elements", {
+        selector,
+        error,
+      });
     }
 
     return results;
   }
 
   /**
-   * Find input elements specifically (optimized for form inputs)
+   * Try a specific identifier strategy
    */
-  async findInputElement(
+  private async trySelector(
     page: Page,
-    identifier: string,
-    options: ElementFindOptions = {}
+    config: StructuredElementSelector,
+    identifier: any,
+    strategyName: string
   ): Promise<ElementFindResult> {
-    const inputStrategies = this.generateInputStrategies(identifier, options);
-    return this.findElement(page, identifier, {
-      ...options,
-      retryStrategies: inputStrategies,
-    });
-  }
+    const selector = this.buildSelector(
+      config.type,
+      identifier,
+      config.context
+    );
 
-  /**
-   * Generate intelligent strategies for finding elements
-   */
-  private generateStrategies(
-    identifier: string,
-    options: { exact?: boolean; caseSensitive?: boolean } = {}
-  ): ElementFindStrategy[] {
-    const { exact = false, caseSensitive = false } = options;
-    const strategies: ElementFindStrategy[] = [];
+    try {
+      this.logger.debug(`Trying ${strategyName} strategy`, { selector });
 
-    // Handle Playwright selector syntax first
-    if (this.isPlaywrightSelector(identifier)) {
-      strategies.push({
-        name: 'playwright-selector',
-        selector: identifier,
-        priority: 100,
-      });
-      
-      // If it's a text selector, also try variations
-      if (identifier.includes('text=')) {
-        const textContent = this.extractTextFromSelector(identifier);
-        if (textContent) {
-          strategies.push(...this.generateTextStrategies(textContent, options));
+      const element = page.locator(selector);
+
+      // Apply additional filters if specified
+      if (config.options?.visible !== false) {
+        // For input elements, be more lenient with visibility checks
+        if (config.type === "input") {
+          await element.waitFor({ state: "attached", timeout: 3000 });
+        } else {
+          await element.waitFor({ state: "visible", timeout: 3000 });
         }
       }
-      
-      return strategies;
-    }
 
-    // If identifier looks like a CSS selector, try it directly first
-    if (this.isCssSelector(identifier)) {
-      strategies.push({
-        name: 'direct-css-selector',
-        selector: identifier,
-        priority: 100,
-      });
-    }
-
-    // If identifier looks like an ID
-    if (identifier.startsWith('#') || (!identifier.includes(' ') && !identifier.includes(':'))) {
-      const idSelector = identifier.startsWith('#') ? identifier : `#${identifier}`;
-      strategies.push({
-        name: 'id-selector',
-        selector: idSelector,
-        priority: 95,
-      });
-    }
-
-    // Generate text-based strategies
-    strategies.push(...this.generateTextStrategies(identifier, options));
-
-    // Generate attribute-based strategies
-    strategies.push(...this.generateAttributeStrategies(identifier, options));
-
-    return strategies;
-  }
-
-  /**
-   * Generate text-based finding strategies
-   */
-  private generateTextStrategies(
-    text: string,
-    options: { exact?: boolean; caseSensitive?: boolean } = {}
-  ): ElementFindStrategy[] {
-    const { exact = false, caseSensitive = false } = options;
-    const strategies: ElementFindStrategy[] = [];
-    
-    // Clean the text for better matching
-    const cleanText = text.trim();
-    
-    // Exact text match strategies
-    strategies.push(
-      // Simple text selector (most reliable)
-      {
-        name: 'text-exact',
-        selector: `text="${cleanText}"`,
-        priority: 95,
-      },
-      // Partial text match
-      {
-        name: 'text-partial',
-        selector: `text=${cleanText}`,
-        priority: 90,
-      },
-      // Button with exact text
-      {
-        name: 'button-text-exact',
-        selector: `button >> text="${cleanText}"`,
-        priority: 92,
-      },
-      // Button with partial text
-      {
-        name: 'button-text-partial',
-        selector: `button >> text=${cleanText}`,
-        priority: 88,
-      },
-      // Link with text
-      {
-        name: 'link-text',
-        selector: `a >> text="${cleanText}"`,
-        priority: 85,
-      },
-      // Any element with exact text
-      {
-        name: 'element-text-exact',
-        selector: `*:has-text("${cleanText}")`,
-        priority: 80,
-      },
-      // Any element with partial text
-      {
-        name: 'element-text-partial',
-        selector: `*:has-text("${cleanText}")`,
-        priority: 75,
-      }
-    );
-
-    // Case insensitive versions if needed
-    if (!caseSensitive) {
-      const lowerText = cleanText.toLowerCase();
-      strategies.push(
-        {
-          name: 'text-case-insensitive',
-          selector: `text=/${cleanText}/i`,
-          priority: 85,
-        },
-        {
-          name: 'button-text-case-insensitive',
-          selector: `button >> text=/${cleanText}/i`,
-          priority: 83,
+      if (config.options?.enabled !== false && config.type === "input") {
+        await element.waitFor({ state: "attached", timeout: 1000 });
+        const isEnabled = await element.isEnabled().catch(() => true);
+        if (!isEnabled) {
+          throw new Error("Element is disabled");
         }
-      );
-    }
-
-    return strategies;
-  }
-
-  /**
-   * Generate attribute-based finding strategies
-   */
-  private generateAttributeStrategies(
-    identifier: string,
-    options: { caseSensitive?: boolean } = {}
-  ): ElementFindStrategy[] {
-    const { caseSensitive = false } = options;
-    const textFlag = caseSensitive ? '' : ' i';
-    
-    return [
-      // Data attributes
-      {
-        name: 'data-testid',
-        selector: `[data-testid*="${identifier}"${textFlag}]`,
-        priority: 85,
-      },
-      {
-        name: 'data-cy',
-        selector: `[data-cy*="${identifier}"${textFlag}]`,
-        priority: 85,
-      },
-      // ARIA attributes
-      {
-        name: 'aria-label',
-        selector: `[aria-label*="${identifier}"${textFlag}]`,
-        priority: 80,
-      },
-      // Placeholder text
-      {
-        name: 'placeholder',
-        selector: `[placeholder*="${identifier}"${textFlag}]`,
-        priority: 75,
-      },
-      // Title attribute
-      {
-        name: 'title-attribute',
-        selector: `[title*="${identifier}"${textFlag}]`,
-        priority: 65,
-      },
-      // Class name partial match
-      {
-        name: 'class-partial',
-        selector: `[class*="${identifier}"${textFlag}]`,
-        priority: 60,
       }
-    ];
-  }
 
-  /**
-   * Check if a string is a Playwright selector
-   */
-  private isPlaywrightSelector(str: string): boolean {
-    return (
-      str.includes('>>') ||
-      str.startsWith('text=') ||
-      str.startsWith('xpath=') ||
-      str.includes(':has-text(') ||
-      str.includes(':visible') ||
-      str.includes(':enabled') ||
-      str.includes('nth-child(')
-    );
-  }
+      this.logger.info(`Element found using ${strategyName} strategy`, {
+        selector,
+      });
 
-  /**
-   * Extract text content from Playwright text selector
-   */
-  private extractTextFromSelector(selector: string): string | null {
-    // Handle "text=Start Challenge" or ">> text=Start Challenge"
-    const textMatch = selector.match(/text=["']?([^"']+)["']?/);
-    if (textMatch && textMatch[1]) {
-      return textMatch[1];
+      return {
+        element,
+        strategy: strategyName,
+        selector,
+        found: true,
+        confidence: 0, // Will be set by caller
+      };
+    } catch (error) {
+      this.logger.debug(`${strategyName} strategy failed`, {
+        selector,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      console.log(`ERROR in ${strategyName} strategy:`, {
+        selector,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      });
+
+      return {
+        element: page.locator("not-found"),
+        strategy: strategyName,
+        selector,
+        found: false,
+        confidence: 0,
+      };
     }
-    
-    // Handle ":has-text("Start Challenge")"
-    const hasTextMatch = selector.match(/:has-text\(["']([^"']+)["']\)/);
-    if (hasTextMatch && hasTextMatch[1]) {
-      return hasTextMatch[1];
-    }
-    
-    return null;
   }
 
   /**
-   * Generate strategies specifically optimized for input elements
+   * Build a Playwright selector from structured configuration
    */
-  private generateInputStrategies(
-    identifier: string,
-    options: { exact?: boolean; caseSensitive?: boolean } = {}
-  ): ElementFindStrategy[] {
-    const { exact = false, caseSensitive = false } = options;
-    const textFlag = caseSensitive ? '' : 'i';
-    const strategies: ElementFindStrategy[] = [];
+  private buildSelector(type: string, identifier: any, context?: any): string {
+    this.logger.debug("Building selector", { type, identifier, context });
+    console.log("DEBUG buildSelector:", { type, identifier, context });
+    let selector = "";
 
-    // Direct input selectors
-    if (this.isCssSelector(identifier)) {
-      strategies.push({
-        name: 'direct-input-selector',
-        selector: identifier,
-        priority: 100,
+    // Start with element type if specified
+    if (type && type !== "any") {
+      selector = type;
+    }
+
+    // Add context parent if specified
+    if (context?.parent) {
+      selector = context.parent + (selector ? ` ${selector}` : " *");
+    }
+
+    // Add position context
+    if (context?.position) {
+      const positionSelectors = {
+        header: "header",
+        footer: "footer",
+        sidebar: '[role="sidebar"], .sidebar, aside',
+        main: 'main, [role="main"], .main-content',
+      };
+      const positionSelector =
+        positionSelectors[context.position as keyof typeof positionSelectors];
+      if (positionSelector) {
+        selector = positionSelector + (selector ? ` ${selector}` : " *");
+      }
+    }
+
+    const conditions: string[] = [];
+
+    // Build attribute conditions
+    if (identifier.id) {
+      conditions.push(`[id="${identifier.id}"]`);
+    }
+
+    if (identifier.name) {
+      conditions.push(`[name="${identifier.name}"]`);
+    }
+
+    if (identifier.className) {
+      conditions.push(`[class="${identifier.className}"]`);
+    }
+
+    if (identifier.classContains) {
+      conditions.push(`[class*="${identifier.classContains}"]`);
+    }
+
+    if (identifier.placeholder) {
+      conditions.push(`[placeholder="${identifier.placeholder}"]`);
+    }
+
+    if (identifier.ariaLabel) {
+      conditions.push(`[aria-label="${identifier.ariaLabel}"]`);
+    }
+
+    if (identifier.testId) {
+      conditions.push(`[data-testid="${identifier.testId}"]`);
+    }
+
+    if (identifier.role) {
+      conditions.push(`[role="${identifier.role}"]`);
+    }
+
+    if (identifier.href) {
+      conditions.push(`[href*="${identifier.href}"]`);
+    }
+
+    if (identifier.alt) {
+      conditions.push(`[alt="${identifier.alt}"]`);
+    }
+
+    // Handle custom attributes
+    if (identifier.attributes) {
+      Object.entries(identifier.attributes).forEach(([key, value]) => {
+        if (value === "") {
+          // Boolean attribute - just check for presence
+          conditions.push(`[${key}]`);
+        } else {
+          // Attribute with value
+          conditions.push(`[${key}="${value}"]`);
+        }
       });
     }
 
-    // Input-specific strategies
-    strategies.push(
-      // Input by name attribute
-      {
-        name: 'input-name',
-        selector: `input[name="${identifier}"]`,
-        priority: 95,
-      },
-      // Input by ID
-      {
-        name: 'input-id',
-        selector: `input#${identifier.replace('#', '')}`,
-        priority: 95,
-      },
-      // Input by placeholder
-      {
-        name: 'input-placeholder',
-        selector: `input[placeholder*="${identifier}"${textFlag ? ' i' : ''}]`,
-        priority: 90,
-      },
-      // Input by label (for attribute)
-      {
-        name: 'input-label-for',
-        selector: `input#${identifier} | label[for*="${identifier}"] >> xpath=../input`,
-        priority: 88,
-      },
-      // Input by associated label text
-      {
-        name: 'input-label-text',
-        selector: `label:has-text("${identifier}") >> xpath=..//input | label:has-text("${identifier}") + input`,
-        priority: 85,
-      },
-      // Textarea by placeholder
-      {
-        name: 'textarea-placeholder',
-        selector: `textarea[placeholder*="${identifier}"${textFlag ? ' i' : ''}]`,
-        priority: 85,
-      },
-      // Select by name
-      {
-        name: 'select-name',
-        selector: `select[name="${identifier}"]`,
-        priority: 85,
-      },
-      // Any form element by data-testid
-      {
-        name: 'form-element-testid',
-        selector: `input[data-testid*="${identifier}"], textarea[data-testid*="${identifier}"], select[data-testid*="${identifier}"]`,
-        priority: 82,
-      },
-      // Any form element by class
-      {
-        name: 'form-element-class',
-        selector: `input[class*="${identifier}"], textarea[class*="${identifier}"], select[class*="${identifier}"]`,
-        priority: 70,
-      }
-    );
+    // Combine base selector with conditions
+    if (conditions.length > 0) {
+      selector = (selector || "*") + conditions.join("");
+    }
 
-    return strategies;
+    // Handle text-based selection
+    if (identifier.text) {
+      if (selector) {
+        selector += ` >> text="${identifier.text}"`;
+      } else {
+        selector = `text="${identifier.text}"`;
+      }
+    } else if (identifier.textContains) {
+      if (selector) {
+        selector += ` >> text=/${identifier.textContains}/i`;
+      } else {
+        selector = `text=/${identifier.textContains}/i`;
+      }
+    }
+
+    // Handle label association for inputs
+    if (
+      identifier.label &&
+      (type === "input" || type === "textarea" || type === "select")
+    ) {
+      selector = `label:has-text("${
+        identifier.label
+      }") >> xpath=following-sibling::${type || "input"}`;
+    }
+
+    // Add index if specified
+    if (context?.index !== undefined) {
+      selector += ` >> nth=${context.index}`;
+    }
+
+    const finalSelector = selector || "*";
+    this.logger.debug("Built final selector", { finalSelector });
+    console.log("DEBUG final selector:", finalSelector);
+    return finalSelector;
   }
 
   /**
-   * Check if a string looks like a CSS selector
+   * Try relaxed matching as a last resort
    */
-  private isCssSelector(str: string): boolean {
-    return (
-      str.includes('#') ||
-      str.includes('.') ||
-      str.includes('[') ||
-      str.includes(':') ||
-      str.includes('>') ||
-      str.includes('+') ||
-      str.includes('~') ||
-      str.includes('*')
-    );
+  private async tryRelaxedMatching(
+    page: Page,
+    config: StructuredElementSelector
+  ): Promise<ElementFindResult> {
+    const relaxedStrategies: string[] = [];
+
+    // Try partial text matching if text was specified
+    if (config.identifier.text) {
+      const words = config.identifier.text.split(" ");
+      if (words.length > 1) {
+        relaxedStrategies.push(`text=/${words[0]}/i`);
+        relaxedStrategies.push(`*:has-text("${words[0]}")`);
+      }
+    }
+
+    // Try element type only
+    if (config.type && config.type !== "any") {
+      relaxedStrategies.push(config.type);
+    }
+
+    // Try any element with specific attributes
+    if (config.identifier.className) {
+      relaxedStrategies.push(`[class*="${config.identifier.className}"]`);
+    }
+
+    for (const strategy of relaxedStrategies) {
+      try {
+        const element = page.locator(strategy);
+        await element.first().waitFor({ state: "visible", timeout: 2000 });
+
+        return {
+          element: element.first(),
+          strategy: "relaxed-matching",
+          selector: strategy,
+          found: true,
+          confidence: 0, // Will be set by caller
+        };
+      } catch (error) {
+        continue;
+      }
+    }
+
+    return {
+      element: page.locator("not-found"),
+      strategy: "relaxed-matching",
+      selector: "none",
+      found: false,
+      confidence: 0,
+    };
   }
 }
 
 export const elementFinder = new ElementFinder();
+
+/**
+ * LLM INSTRUCTIONS FOR STRUCTURED ELEMENT SELECTION
+ *
+ * When generating element selectors for web automation, use this structured JSON format:
+ *
+ * BASIC TEMPLATE:
+ * {
+ *   "type": "button|input|link|div|span|form|...",
+ *   "identifier": {
+ *     // At least one of these properties is required
+ *     "text": "exact text content",
+ *     "textContains": "partial text",
+ *     "id": "element-id",
+ *     "name": "input-name",
+ *     "placeholder": "placeholder text",
+ *     "className": "exact-class-name",
+ *     "classContains": "partial-class",
+ *     "testId": "data-testid-value",
+ *     "ariaLabel": "accessibility label"
+ *   },
+ *   "fallbacks": [
+ *     // Alternative strategies if primary fails
+ *     { "textContains": "partial text" },
+ *     { "role": "button" }
+ *   ],
+ *   "context": {
+ *     "parent": "form|nav|header|...",
+ *     "position": "header|footer|sidebar|main",
+ *     "index": 0  // if multiple similar elements
+ *   },
+ *   "options": {
+ *     "timeout": 10000,
+ *     "visible": true,
+ *     "exact": false
+ *   }
+ * }
+ *
+ * COMMON EXAMPLES:
+ *
+ * 1. Button with text:
+ * {
+ *   "type": "button",
+ *   "identifier": { "text": "Sign Up" },
+ *   "fallbacks": [{ "textContains": "Sign" }]
+ * }
+ *
+ * 2. Email input field:
+ * {
+ *   "type": "input",
+ *   "identifier": { "name": "email" },
+ *   "fallbacks": [
+ *     { "placeholder": "Email" },
+ *     { "attributes": { "type": "email" } }
+ *   ]
+ * }
+ *
+ * 3. Navigation link:
+ * {
+ *   "type": "link",
+ *   "identifier": { "text": "About" },
+ *   "context": { "parent": "nav" }
+ * }
+ *
+ * 4. Form submit button:
+ * {
+ *   "type": "button",
+ *   "identifier": { "attributes": { "type": "submit" } },
+ *   "context": { "parent": "form" }
+ * }
+ *
+ * 5. Specific div by class:
+ * {
+ *   "type": "div",
+ *   "identifier": { "classContains": "content" },
+ *   "context": { "position": "main" }
+ * }
+ *
+ * PRIORITY ORDER:
+ * 1. Use specific identifiers (id, name, testId) when available
+ * 2. Use text content for buttons and links
+ * 3. Use semantic attributes (role, aria-label)
+ * 4. Use class names and other attributes as fallbacks
+ * 5. Always provide context when elements might be ambiguous
+ * 6. Include fallback strategies for robust selection
+ */

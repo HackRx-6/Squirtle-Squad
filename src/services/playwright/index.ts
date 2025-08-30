@@ -8,19 +8,30 @@ export { ContentExtractor } from "./contentExtractor.playwright";
 export { SessionManager } from "./sessionManager.playwright";
 
 // Generic browser automation utilities
-export { elementFinder, ElementFinder } from './elementFinder.playwright';
-export { inputFiller, InputFiller } from './inputFiller.playwright';
-export { browserAutomation, BrowserAutomation } from './browserAutomation.playwright';
+export { elementFinder, ElementFinder } from "./elementFinder.playwright";
+export { inputFiller, InputFiller } from "./inputFiller.playwright";
+export {
+  browserAutomation,
+  BrowserAutomation,
+} from "./browserAutomation.playwright";
+
+// Structured selector utilities
+export {
+  StructuredSelectorValidator,
+  createStructuredSelector,
+  SelectorTemplates,
+} from "./selectorValidator.playwright";
 
 // Type exports
 export * from "./types";
 
 // Re-export specific interfaces for convenience
 export type {
-  ElementFindOptions,
-  ElementFindStrategy,
+  StructuredElementSelector,
   ElementFindResult,
-} from './elementFinder.playwright';
+} from "./elementFinder.playwright";
+
+export type { SelectorValidationResult } from "./selectorValidator.playwright";
 
 export type {
   InputFillOptions,
@@ -28,11 +39,11 @@ export type {
   FormFillData,
   FormFillOptions,
   FormFillResult,
-} from './inputFiller.playwright';
+} from "./inputFiller.playwright";
 
 export type {
   BrowserAutomationOptions,
   ClickOptions,
   NavigationOptions,
   WaitOptions,
-} from './browserAutomation.playwright';
+} from "./browserAutomation.playwright";

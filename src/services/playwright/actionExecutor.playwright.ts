@@ -138,12 +138,12 @@ export class ActionExecutor {
       actionId,
       targetUrl: action.url,
     });
-    
+
     await page.goto(action.url, {
       waitUntil: "domcontentloaded",
       timeout,
     });
-    
+
     this.logger.info(`Navigation completed to: ${page.url()}`, {
       actionId,
       finalUrl: page.url(),
@@ -269,9 +269,7 @@ export class ActionExecutor {
       });
     } else {
       this.logger.info("Scrolling to bottom of page", { actionId });
-      await page.evaluate(
-        "window.scrollTo(0, document.body.scrollHeight)"
-      );
+      await page.evaluate("window.scrollTo(0, document.body.scrollHeight)");
       this.logger.info("Scrolled to bottom of page", { actionId });
     }
   }
@@ -353,11 +351,11 @@ export class ActionExecutor {
     const submitSelector =
       action.submitSelector ||
       'input[type="submit"], button[type="submit"], button:has-text("Submit")';
-    
+
     this.logger.info(`Submitting form with selector: ${submitSelector}`, {
       actionId,
     });
-    
+
     await page.waitForSelector(submitSelector, { timeout });
     await page.click(submitSelector);
     this.logger.info("Form submission completed", { actionId });
@@ -376,11 +374,61 @@ export class ActionExecutor {
     this.logger.info(`Finding element: ${action.selector}`, { actionId });
 
     try {
-      const findResult = await elementFinder.findElement(page, action.selector, {
-        timeout,
-        exact: false,
-        caseSensitive: false,
-      });
+      // Convert legacy string selector to structured selector for the new element finder
+      let structuredSelector: any = {
+        type: "any",
+        identifier: {},
+        fallbacks: [],
+        options: {
+          timeout,
+          exact: false,
+          caseSensitive: false,
+        },
+      };
+
+      // Handle common Playwright selectors
+      if (
+        action.selector.includes("text=") ||
+        action.selector.includes(":has-text(")
+      ) {
+        // Extract text from text selectors
+        const textMatch = action.selector.match(
+          /text="([^"]+)"|:has-text\("([^"]+)"\)/
+        );
+        if (textMatch) {
+          const text = textMatch[1] || textMatch[2];
+          if (text) {
+            structuredSelector.identifier = { text };
+            structuredSelector.fallbacks = [
+              { textContains: text },
+              { role: "button" },
+              { role: "link" },
+            ];
+          }
+        }
+      } else if (action.selector.startsWith("#")) {
+        // ID selector
+        structuredSelector.identifier = { id: action.selector.substring(1) };
+        structuredSelector.fallbacks = [];
+      } else if (action.selector.startsWith(".")) {
+        // Class selector
+        const className = action.selector.substring(1);
+        structuredSelector.identifier = { className };
+        structuredSelector.fallbacks = [{ classContains: className }];
+      } else {
+        // Generic selector - try as text content
+        const cleanText = action.selector.replace(/['"]/g, "");
+        structuredSelector.identifier = { textContains: cleanText };
+        structuredSelector.fallbacks = [
+          { classContains: cleanText },
+          { id: cleanText },
+        ];
+      }
+
+      const findResult = await elementFinder.findElement(
+        page,
+        structuredSelector
+      );
 
       if (!findResult.found) {
         throw new Error(`Element not found: ${action.selector}`);
@@ -391,6 +439,7 @@ export class ActionExecutor {
         selector: action.selector,
         strategy: findResult.strategy,
         finalSelector: findResult.selector,
+        confidence: findResult.confidence,
       });
     } catch (error) {
       this.logger.error(`Find element failed`, {
@@ -412,7 +461,9 @@ export class ActionExecutor {
       throw new Error("Get text action requires a selector");
     }
 
-    this.logger.info(`Getting text from element: ${action.selector}`, { actionId });
+    this.logger.info(`Getting text from element: ${action.selector}`, {
+      actionId,
+    });
 
     try {
       const text = await browserAutomation.getText(page, action.selector, {
@@ -447,20 +498,30 @@ export class ActionExecutor {
     actionId: string
   ): Promise<void> {
     if (!action.selector || !action.attributeName) {
-      throw new Error("Get attribute action requires both selector and attributeName");
+      throw new Error(
+        "Get attribute action requires both selector and attributeName"
+      );
     }
 
-    this.logger.info(`Getting attribute "${action.attributeName}" from element: ${action.selector}`, { actionId });
+    this.logger.info(
+      `Getting attribute "${action.attributeName}" from element: ${action.selector}`,
+      { actionId }
+    );
 
     try {
-      const value = await browserAutomation.getAttribute(page, action.selector, action.attributeName, {
-        timeout,
-        elementFindOptions: {
+      const value = await browserAutomation.getAttribute(
+        page,
+        action.selector,
+        action.attributeName,
+        {
           timeout,
-          exact: false,
-          caseSensitive: false,
-        },
-      });
+          elementFindOptions: {
+            timeout,
+            exact: false,
+            caseSensitive: false,
+          },
+        }
+      );
 
       this.logger.info(`Attribute retrieved successfully`, {
         actionId,
@@ -486,20 +547,30 @@ export class ActionExecutor {
     actionId: string
   ): Promise<void> {
     if (!action.selector || action.checked === undefined) {
-      throw new Error("Set checkbox action requires both selector and checked value");
+      throw new Error(
+        "Set checkbox action requires both selector and checked value"
+      );
     }
 
-    this.logger.info(`Setting checkbox "${action.selector}" to: ${action.checked}`, { actionId });
+    this.logger.info(
+      `Setting checkbox "${action.selector}" to: ${action.checked}`,
+      { actionId }
+    );
 
     try {
-      await browserAutomation.setCheckbox(page, action.selector, action.checked, {
-        timeout,
-        elementFindOptions: {
+      await browserAutomation.setCheckbox(
+        page,
+        action.selector,
+        action.checked,
+        {
           timeout,
-          exact: false,
-          caseSensitive: false,
-        },
-      });
+          elementFindOptions: {
+            timeout,
+            exact: false,
+            caseSensitive: false,
+          },
+        }
+      );
 
       this.logger.info(`Checkbox set successfully`, {
         actionId,
@@ -524,20 +595,30 @@ export class ActionExecutor {
     actionId: string
   ): Promise<void> {
     if (!action.selector || action.optionValue === undefined) {
-      throw new Error("Select option action requires both selector and optionValue");
+      throw new Error(
+        "Select option action requires both selector and optionValue"
+      );
     }
 
-    this.logger.info(`Selecting option "${action.optionValue}" from: ${action.selector}`, { actionId });
+    this.logger.info(
+      `Selecting option "${action.optionValue}" from: ${action.selector}`,
+      { actionId }
+    );
 
     try {
-      await browserAutomation.selectOption(page, action.selector, action.optionValue, {
-        timeout,
-        elementFindOptions: {
+      await browserAutomation.selectOption(
+        page,
+        action.selector,
+        action.optionValue,
+        {
           timeout,
-          exact: false,
-          caseSensitive: false,
-        },
-      });
+          elementFindOptions: {
+            timeout,
+            exact: false,
+            caseSensitive: false,
+          },
+        }
+      );
 
       this.logger.info(`Option selected successfully`, {
         actionId,
@@ -601,8 +682,11 @@ export class ActionExecutor {
       throw new Error("Wait for element action requires a selector");
     }
 
-    const waitState = action.waitState || 'visible';
-    this.logger.info(`Waiting for element to be ${waitState}: ${action.selector}`, { actionId });
+    const waitState = action.waitState || "visible";
+    this.logger.info(
+      `Waiting for element to be ${waitState}: ${action.selector}`,
+      { actionId }
+    );
 
     try {
       await browserAutomation.waitForElement(page, action.selector, {
