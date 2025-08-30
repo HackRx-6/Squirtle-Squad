@@ -130,7 +130,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
       function: {
         name: "web_automation",
         description:
-          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.",
+          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.\n\nIMPORTANT FOR CHALLENGE WEBSITES: Many challenge sites only show input fields AFTER clicking 'Start Challenge' or similar buttons. Always start the challenge first before looking for input fields.\n\nText-based clicking examples: Use >> text=Start Challenge or button containing 'Start' text.\n\nSpecial action 'find_and_fill': Intelligently finds input fields and fills them. Requires 'text' parameter, 'selector' is optional. Example: {type: 'find_and_fill', text: 'secret_code'} will find the first available input and fill it. NOTE: Input fields must exist on the page - if you get 'no input found' errors, you may need to click 'Start Challenge' or wait for dynamic content to load first.",
         parameters: {
           type: "object",
           properties: {
@@ -157,17 +157,18 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                       "submit_form",
                       "find_and_fill",
                     ],
-                    description: "The type of action to perform",
+                    description:
+                      "The type of action to perform. 'find_and_fill' automatically finds inputs and fills them - only requires 'text' parameter, 'selector' is optional. IMPORTANT: Input fields must exist on the page before using find_and_fill. For challenge websites, click 'Start Challenge' first.",
                   },
                   selector: {
                     type: "string",
                     description:
-                      "CSS selector for the element (required for click, type, hover, select actions)",
+                      "CSS selector for the element (required for click, type, hover, select actions; optional for find_and_fill which can auto-detect inputs). For text-based clicking, use >> text=content or [role='button'] or button selectors.",
                   },
                   text: {
                     type: "string",
                     description:
-                      "Text to type or option to select (required for type and select actions)",
+                      "Text to type or option to select (required for type, select, and find_and_fill actions)",
                   },
                   url: {
                     type: "string",
@@ -486,8 +487,20 @@ export const executeToolCall = async (
                 timeout: options?.timeout || 15000, // Reduced from 30000ms to 15000ms
                 waitForNetworkIdle: options?.waitForNetworkIdle ?? false,
                 includeContent: options?.includeContent ?? true,
-                useEnhancedExtraction: options?.useEnhancedExtraction ?? false,
-                enhancedExtractionOptions: options?.enhancedExtractionOptions,
+                useEnhancedExtraction: options?.useEnhancedExtraction ?? true, // Enable intelligent extraction by default
+                enhancedExtractionOptions: {
+                  includeHTML: true,
+                  includeInteractiveElements: true,
+                  maxContentSize: 4000, // Even more aggressive - 4KB limit for LLM consumption
+                  htmlCleaningOptions: {
+                    includeImportantJS: false,
+                    preserveCSS: false,
+                    includeDataAttributes: true, // Keep data attributes for challenges
+                    includeAriaAttributes: false,
+                    includeEventHandlers: false,
+                  },
+                  ...options?.enhancedExtractionOptions, // Allow override
+                },
               },
             },
             sessionId
