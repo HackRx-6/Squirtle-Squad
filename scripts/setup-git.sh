@@ -1,48 +1,41 @@
 #!/bin/bash
 
-# Git setup script for production container startup
-# This script sets up Git repository and remote configuration ONCE at container start
+# Git Setup Script with Dynamic Branch Strategy
+# This script sets up Git authentication and creates unique branches for each deployment
+# to avoid merge conflicts and non-fast-forward issues
 
-set -e
+echo "🚀 [Startup] Setting up Git configuration for container..."
 
-echo "� [Startup] Setting up Git configuration for container..."
-
-# Configure Git user (these can be overridden by environment variables)
-GIT_USER_EMAIL=${GIT_USER_EMAIL:-"ai@hackrx.com"}
-GIT_USER_NAME=${GIT_USER_NAME:-"AI Assistant"}
-GIT_REPO_URL=${GIT_REPO_URL:-"https://github.com/HackRx-6/Squirtle-Squad.git"}
-
-# Set Git configuration
-echo "👤 [Startup] Configuring Git user..."
-git config --global user.email "$GIT_USER_EMAIL"
-git config --global user.name "$GIT_USER_NAME"
-git config --global init.defaultBranch main
-
-# Configure Git to handle push behavior for new branches
-git config --global push.default simple
-git config --global push.autoSetupRemote true
-
-# ROBUST GitHub Authentication Setup (using personal token format that works)
+# Check if GITHUB_TOKEN is provided
 if [ ! -z "$GITHUB_TOKEN" ]; then
     echo "🔐 [Startup] Configuring GitHub authentication with personal token..."
-    echo "🔑 [Startup] Token type: ${GITHUB_TOKEN:0:4}... (length: ${#GITHUB_TOKEN})"
     
-    # Method 1: Set up credential helper with store
-    git config --global credential.helper 'store --file=/tmp/.git-credentials'
+    # Set up git configuration
+    git config --global user.name "Squirtle Squad Bot"
+    git config --global user.email "bot@squirtle-squad.com"
     
-    # Method 2: Create credentials file with token format that works with personal tokens
-    echo "https://$GITHUB_TOKEN:@github.com" > /tmp/.git-credentials
-    chmod 600 /tmp/.git-credentials
+    # Set up credential store with token
+    git config --global credential.helper store
     
-    # Method 3: Configure URL rewriting for GitHub (fallback method)
-    git config --global url."https://$GITHUB_TOKEN:@github.com/".insteadOf "https://github.com/"
+    # Ensure .git-credentials directory exists
+    mkdir -p ~/.git-credentials
+    
+    # Store credentials using personal token format (proven to work)
+    echo "https://${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+    
+    # Also configure URL rewriting for additional reliability
+    git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+    
+    # Set the repository URL with authentication
+    export GIT_REPO_URL="https://${GITHUB_TOKEN}@github.com/HackRx-6/Squirtle-Squad.git"
     
     echo "✅ [Startup] GitHub token authentication configured with personal token format"
 else
     echo "⚠️ [Startup] GITHUB_TOKEN not provided - Git operations may require manual authentication"
+    export GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git"
 fi
 
-# Repository initialization and sync
+# Repository initialization and setup
 echo "📂 [Startup] Setting up repository in /app..."
 cd /app
 
@@ -63,7 +56,7 @@ else
         expected_url="$GIT_REPO_URL"
         
         if [ "$current_url" != "$expected_url" ]; then
-            echo "� [Startup] Updating remote URL to: $expected_url"
+            echo "🔄 [Startup] Updating remote URL to: $expected_url"
             git remote set-url origin "$expected_url"
         fi
     else
@@ -72,44 +65,46 @@ else
     fi
 fi
 
-# Sync with remote repository (handle any existing content gracefully)
-echo "🔄 [Startup] Syncing with remote repository..."
+# Dynamic Branch Strategy - Create unique branch for this deployment
+echo "🌿 [Startup] Setting up dynamic branch strategy..."
+
+# Create a unique branch name for this container session
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+CONTAINER_ID=$(hostname | head -c 8)
+BRANCH_NAME="deployment-${TIMESTAMP}-${CONTAINER_ID}"
+
+echo "🎯 [Startup] Creating unique deployment branch: $BRANCH_NAME"
+
 if git fetch origin 2>/dev/null; then
-    echo "� [Startup] Successfully fetched from remote"
+    echo "✅ [Startup] Successfully fetched from remote"
     
     # Check if remote main branch exists
     if git ls-remote --heads origin main | grep -q main; then
-        echo "🌿 [Startup] Remote main branch exists, setting up tracking..."
+        echo "📊 [Startup] Remote main branch exists, creating branch from main..."
         
-        # Get current branch
-        CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+        # Create our unique branch from main
+        git checkout -B "$BRANCH_NAME" origin/main 2>/dev/null || git checkout -b "$BRANCH_NAME" 2>/dev/null
         
-        # If we're not on main, switch to main
-        if [ "$CURRENT_BRANCH" != "main" ]; then
-            echo "� [Startup] Switching to main branch..."
-            git checkout -B main origin/main 2>/dev/null || git checkout -b main 2>/dev/null || true
-        fi
+        echo "✅ [Startup] Branch '$BRANCH_NAME' created from latest main"
         
-        # Check if we have any local commits
-        if git rev-parse HEAD >/dev/null 2>&1; then
-            echo "📚 [Startup] Local commits exist, ensuring we're up to date..."
-            # Set upstream tracking
-            git branch --set-upstream-to=origin/main main 2>/dev/null || true
-            # Merge any remote changes (favoring remote in case of conflicts)
-            git pull origin main --no-edit --strategy=recursive -X theirs 2>/dev/null || true
-        else
-            echo "🔄 [Startup] No local commits, syncing with remote main..."
-            git checkout -B main origin/main 2>/dev/null || true
-            git branch --set-upstream-to=origin/main main 2>/dev/null || true
-        fi
-        
-        echo "✅ [Startup] Successfully synced with remote main branch"
     else
-        echo "📝 [Startup] Remote main branch doesn't exist - will be created on first push"
+        echo "📝 [Startup] Remote main branch doesn't exist - creating initial branch..."
+        git checkout -b "$BRANCH_NAME"
     fi
+    
 else
     echo "⚠️ [Startup] Could not fetch from remote (may be empty repository or network issue)"
+    # Still create a unique branch locally
+    git checkout -b "$BRANCH_NAME" 2>/dev/null || true
 fi
+
+# Set up Git user config for this repository
+git config user.name "Squirtle Squad Bot"
+git config user.email "bot@squirtle-squad.com"
+
+# Store branch name for later use by the application
+echo "$BRANCH_NAME" > /app/.current-branch
+echo "💾 [Startup] Branch name stored in /app/.current-branch"
 
 # Test the Git setup
 echo "🧪 [Startup] Testing Git authentication and setup..."
@@ -118,22 +113,21 @@ if [ ! -z "$GITHUB_TOKEN" ]; then
         echo "✅ [Startup] Git authentication test PASSED - GitHub connectivity working!"
     else
         echo "⚠️ [Startup] Git authentication test FAILED - but continuing startup..."
-        echo "    This might be due to network issues or token permissions"
     fi
 else
     echo "ℹ️ [Startup] Skipping authentication test (no token provided)"
 fi
 
-echo "✅ [Startup] Git setup completed successfully!"
+echo "🎉 [Startup] Git setup completed successfully!"
+echo "📝 [Startup] All Git operations will use branch '$BRANCH_NAME'"
+echo "🚀 [Startup] This eliminates merge conflicts and non-fast-forward issues!"
+echo "💡 [Startup] LLM can now simply call 'git push' without conflicts!"
 
-# Final status report
+# Summary of what was configured
 echo ""
 echo "📋 [Startup] Git Configuration Summary:"
-echo "  User: $(git config user.name) <$(git config user.email)>"
-echo "  Remote: $(git remote get-url origin 2>/dev/null | sed 's/:[^@]*@/:***@/' || echo 'No remote configured')"
-echo "  Branch: $(git branch --show-current 2>/dev/null || echo 'No branch')"
-echo "  Upstream: $(git rev-parse --abbrev-ref @{upstream} 2>/dev/null || echo 'Not configured')"
-echo "  Working directory: $(pwd)"
-
+echo "   🌿 Branch: $BRANCH_NAME"
+echo "   🔗 Remote: $(git remote get-url origin 2>/dev/null || echo 'Not set')"
+echo "   👤 User: $(git config user.name) <$(git config user.email)>"
+echo "   🔐 Auth: $([ ! -z "$GITHUB_TOKEN" ] && echo 'Personal Token' || echo 'Manual')"
 echo ""
-echo "🎉 [Startup] Ready for Git operations!"

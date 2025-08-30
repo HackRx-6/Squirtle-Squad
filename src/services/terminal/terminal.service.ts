@@ -134,15 +134,15 @@ export class TerminalService {
         changed: originalCommand !== cleanedCommand,
       });
 
-      // Simple Git push enhancement (upstream handling only)
+      // Simple Git push enhancement with dynamic branch support
       if (command.includes("git push") && !command.includes("--set-upstream")) {
         console.log(
-          "🔍 [Terminal] Detected git push command, ensuring upstream is set"
+          "🔍 [Terminal] Detected git push command, using dynamic branch strategy"
         );
 
         // Simple approach: if it's just "git push", make it set upstream automatically
         if (command.trim() === "git push") {
-          // Try to get current branch
+          // Try to get current branch (should be the dynamic branch from startup)
           try {
             const branchResult = await this.executeCommandInternal(
               "git branch --show-current",
@@ -153,7 +153,9 @@ export class TerminalService {
             if (branchResult.success && branchResult.stdout.trim()) {
               const currentBranch = branchResult.stdout.trim();
               command = `git push --set-upstream origin ${currentBranch}`;
-              console.log(`🔧 [Terminal] Modified to: ${command}`);
+              console.log(`🌿 [Terminal] Pushing to dynamic branch: ${currentBranch}`);
+              console.log(`🔧 [Terminal] Modified command: ${command}`);
+              console.log(`🎉 [Terminal] This avoids merge conflicts with main!`);
             }
           } catch (error) {
             console.warn(
