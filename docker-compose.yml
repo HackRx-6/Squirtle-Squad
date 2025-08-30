@@ -40,6 +40,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DOCKER_ENV=true
       # Python Service Configuration
       - PYTHON_SERVICE_URL=${PYTHON_SERVICE_URL}
       # Load from .env file

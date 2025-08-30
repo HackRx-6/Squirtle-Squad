@@ -91,7 +91,7 @@ COPY . .
 RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --external pdfjs-dist --external unpdf --splitting
 
 # Production stage - optimized runtime image
-FROM alpine-base AS production
+FROM playwright-base AS production
 
 WORKDIR /app
 

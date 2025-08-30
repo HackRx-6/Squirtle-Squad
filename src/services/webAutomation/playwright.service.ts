@@ -96,7 +96,10 @@ export class PlaywrightService {
       });
 
       const startTime = Date.now();
-      this.browser = await chromium.launch({
+      
+      // Use system Chromium in Docker/production environments
+      const isDocker = process.env.DOCKER_ENV === 'true' || process.env.NODE_ENV === 'production';
+      const launchOptions: any = {
         headless: this.config.headless,
         args: [
           "--no-sandbox",
@@ -110,7 +113,19 @@ export class PlaywrightService {
           "--no-first-run",
           "--disable-default-apps",
         ],
-      });
+      };
+
+      // In Docker or production, use system-installed Chromium
+      if (isDocker) {
+        launchOptions.executablePath = '/usr/bin/chromium-browser';
+        this.logger.info("Using system Chromium browser in Docker/production environment", {
+          executablePath: launchOptions.executablePath,
+          dockerEnv: process.env.DOCKER_ENV,
+          nodeEnv: process.env.NODE_ENV
+        });
+      }
+      
+      this.browser = await chromium.launch(launchOptions);
 
       const launchTime = Date.now() - startTime;
       this.logger.info("Chromium browser launched successfully", {
