@@ -24,10 +24,20 @@ git config --global push.autoSetupRemote true
 # Configure authentication if GitHub token is provided
 if [ ! -z "$GITHUB_TOKEN" ]; then
     echo "🔐 Configuring GitHub token authentication..."
-    # Extract repository info from URL
-    REPO_URL_WITH_TOKEN=$(echo "$GIT_REPO_URL" | sed "s|https://|https://$GITHUB_TOKEN@|")
-    git config --global credential.helper store
-    echo "$REPO_URL_WITH_TOKEN" | git credential approve 2>/dev/null || true
+    
+    # Set up credential helper with store
+    git config --global credential.helper 'store --file=/tmp/.git-credentials'
+    
+    # Create credentials file with proper permissions
+    echo "https://$GITHUB_TOKEN@github.com" > /tmp/.git-credentials
+    chmod 600 /tmp/.git-credentials
+    
+    # Also configure URL rewriting for GitHub
+    git config --global url."https://$GITHUB_TOKEN@github.com/".insteadOf "https://github.com/"
+    
+    echo "✅ GitHub token authentication configured"
+else
+    echo "⚠️ GITHUB_TOKEN not provided, using default authentication"
 fi
 
 # Check if we're already in a Git repository
@@ -37,13 +47,7 @@ if [ ! -d ".git" ]; then
     
     # Add remote origin
     echo "🔗 Adding remote origin: $GIT_REPO_URL"
-    if [ ! -z "$GITHUB_TOKEN" ]; then
-        # Use token-authenticated URL for remote
-        REPO_URL_WITH_TOKEN=$(echo "$GIT_REPO_URL" | sed "s|https://|https://$GITHUB_TOKEN@|")
-        git remote add origin "$REPO_URL_WITH_TOKEN"
-    else
-        git remote add origin "$GIT_REPO_URL"
-    fi
+    git remote add origin "$GIT_REPO_URL"
     
     # Try to fetch the remote repository to sync with existing content
     echo "🔄 Fetching remote repository..."
@@ -69,22 +73,14 @@ else
     if git remote get-url origin >/dev/null 2>&1; then
         current_url=$(git remote get-url origin)
         expected_url="$GIT_REPO_URL"
-        if [ ! -z "$GITHUB_TOKEN" ]; then
-            expected_url=$(echo "$GIT_REPO_URL" | sed "s|https://|https://$GITHUB_TOKEN@|")
-        fi
         
         if [ "$current_url" != "$expected_url" ]; then
-            echo "🔄 Updating remote URL"
+            echo "🔄 Updating remote URL to: $expected_url"
             git remote set-url origin "$expected_url"
         fi
     else
         echo "🔗 Adding remote origin: $GIT_REPO_URL"
-        if [ ! -z "$GITHUB_TOKEN" ]; then
-            REPO_URL_WITH_TOKEN=$(echo "$GIT_REPO_URL" | sed "s|https://|https://$GITHUB_TOKEN@|")
-            git remote add origin "$REPO_URL_WITH_TOKEN"
-        else
-            git remote add origin "$GIT_REPO_URL"
-        fi
+        git remote add origin "$GIT_REPO_URL"
     fi
     
     # Ensure the current branch has upstream tracking
