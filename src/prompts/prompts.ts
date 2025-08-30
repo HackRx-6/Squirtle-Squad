@@ -35,7 +35,14 @@ Use when interacting with websites, scraping content, or performing web actions:
 - select: Select dropdown options
 - fill_form: Fill multiple form fields at once
 - submit_form: Submit forms
-- find_and_fill: Intelligently find and fill inputs
+- type: Type text with intelligent element finding
+- find_element: Find elements using smart strategies
+- get_text: Extract text content from elements
+- get_attribute: Get attribute values from elements
+- set_checkbox: Check/uncheck checkboxes
+- select_option: Select dropdown options intelligently
+- scroll_to_element: Scroll elements into view
+- wait_for_element: Wait for elements to appear/disappear
 
 ### 2. TERMINAL EXECUTION (execute_terminal_command)
 Use for system commands, code execution, file operations:

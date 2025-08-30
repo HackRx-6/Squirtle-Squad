@@ -40,7 +40,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
       function: {
         name: "web_automation",
         description:
-          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.\n\nIMPORTANT FOR CHALLENGE WEBSITES: Many challenge sites only show input fields AFTER clicking 'Start Challenge' or similar buttons. Always start the challenge first before looking for input fields.\n\nText-based clicking examples: Use >> text=Start Challenge or button containing 'Start' text.\n\nSpecial action 'find_and_fill': Intelligently finds input fields and fills them. Requires 'text' parameter, 'selector' is optional. Example: {type: 'find_and_fill', text: 'secret_code'} will find the first available input and fill it. NOTE: Input fields must exist on the page - if you get 'no input found' errors, you may need to click 'Start Challenge' or wait for dynamic content to load first.",
+          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.\n\nIMPORTANT FOR CHALLENGE WEBSITES: Many challenge sites only show input fields AFTER clicking 'Start Challenge' or similar buttons. Always start the challenge first before looking for input fields.\n\nText-based clicking examples: Use 'click' with selectors like '>> text=Start Challenge', 'button:has-text(\"Start\")', or '[role=\"button\"]'.\n\nSmart input filling: Use 'type' action which includes intelligent element finding. It will try multiple strategies to find inputs by placeholder, label, name, etc. Example: {type: 'type', selector: 'username', text: 'myuser'} will find username input field intelligently.",
         parameters: {
           type: "object",
           properties: {
@@ -65,20 +65,26 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                       "hover",
                       "fill_form",
                       "submit_form",
-                      "find_and_fill",
+                      "find_element",
+                      "get_text",
+                      "get_attribute",
+                      "set_checkbox",
+                      "select_option",
+                      "scroll_to_element",
+                      "wait_for_element",
                     ],
                     description:
-                      "The type of action to perform. 'find_and_fill' automatically finds inputs and fills them - only requires 'text' parameter, 'selector' is optional. IMPORTANT: Input fields must exist on the page before using find_and_fill. For challenge websites, click 'Start Challenge' first.",
+                      "The type of action to perform. Use 'type' for filling inputs (it includes intelligent element finding). For text-based clicking, use 'click' with selectors like '>> text=Start Challenge' or 'button:has-text(\"Start\")'.",
                   },
                   selector: {
                     type: "string",
                     description:
-                      "CSS selector for the element (required for click, type, hover, select actions; optional for find_and_fill which can auto-detect inputs). For text-based clicking, use >> text=content or [role='button'] or button selectors.",
+                      "CSS selector for the element (required for most actions except wait). Use intelligent selectors like '>> text=Start Challenge', 'button:has-text(\"Start\")', '[data-testid=\"submit\"]', or '#input-field'. The 'type' action includes smart element finding if exact selector fails.",
                   },
                   text: {
                     type: "string",
                     description:
-                      "Text to type or option to select (required for type, select, and find_and_fill actions)",
+                      "Text to type, option to select, or search criteria (required for type, select actions)",
                   },
                   url: {
                     type: "string",
@@ -98,6 +104,27 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
                     type: "string",
                     description:
                       "CSS selector for submit button (optional for submit_form action)",
+                  },
+                  optionValue: {
+                    type: "string",
+                    description:
+                      "Option value or text to select (for select_option action)",
+                  },
+                  checked: {
+                    type: "boolean",
+                    description:
+                      "Checkbox state - true to check, false to uncheck (for set_checkbox action)",
+                  },
+                  attributeName: {
+                    type: "string",
+                    description:
+                      "Name of the attribute to retrieve (for get_attribute action)",
+                  },
+                  waitState: {
+                    type: "string",
+                    enum: ["attached", "detached", "visible", "hidden"],
+                    description:
+                      "State to wait for (for wait_for_element action, default: visible)",
                   },
                 },
                 required: ["type"],
