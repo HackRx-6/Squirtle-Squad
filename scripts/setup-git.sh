@@ -17,6 +17,10 @@ git config --global user.email "$GIT_USER_EMAIL"
 git config --global user.name "$GIT_USER_NAME"
 git config --global init.defaultBranch main
 
+# Configure Git to handle push behavior for new branches
+git config --global push.default simple
+git config --global push.autoSetupRemote true
+
 # Configure authentication if GitHub token is provided
 if [ ! -z "$GITHUB_TOKEN" ]; then
     echo "🔐 Configuring GitHub token authentication..."
@@ -39,6 +43,24 @@ if [ ! -d ".git" ]; then
         git remote add origin "$REPO_URL_WITH_TOKEN"
     else
         git remote add origin "$GIT_REPO_URL"
+    fi
+    
+    # Try to fetch the remote repository to sync with existing content
+    echo "🔄 Fetching remote repository..."
+    if git fetch origin main 2>/dev/null; then
+        echo "✅ Remote repository fetched successfully"
+        # Check if remote has content
+        if git ls-remote --heads origin main | grep -q main; then
+            echo "🔀 Setting up branch tracking with remote main..."
+            # Create local main branch tracking remote
+            git checkout -b main origin/main 2>/dev/null || git checkout main 2>/dev/null || true
+            git branch --set-upstream-to=origin/main main 2>/dev/null || true
+        else
+            echo "📝 Remote repository is empty, will set upstream on first push"
+        fi
+    else
+        echo "⚠️ Could not fetch remote repository (may be empty or authentication issue)"
+        echo "📝 Will set upstream branch on first push"
     fi
 else
     echo "✅ Git repository already exists"
@@ -63,6 +85,24 @@ else
         else
             git remote add origin "$GIT_REPO_URL"
         fi
+    fi
+    
+    # Ensure the current branch has upstream tracking
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+    echo "📍 Current branch: $CURRENT_BRANCH"
+    
+    # Check if current branch has upstream
+    if ! git rev-parse --abbrev-ref "$CURRENT_BRANCH@{upstream}" >/dev/null 2>&1; then
+        echo "🔗 Setting up upstream tracking for $CURRENT_BRANCH..."
+        # Try to set upstream if remote branch exists
+        if git ls-remote --heads origin "$CURRENT_BRANCH" | grep -q "$CURRENT_BRANCH"; then
+            git branch --set-upstream-to=origin/"$CURRENT_BRANCH" "$CURRENT_BRANCH" 2>/dev/null || true
+            echo "✅ Upstream tracking configured for $CURRENT_BRANCH"
+        else
+            echo "📝 Remote branch doesn't exist yet, will set upstream on first push"
+        fi
+    else
+        echo "✅ Upstream tracking already configured"
     fi
 fi
 

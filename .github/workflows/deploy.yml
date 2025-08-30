@@ -213,6 +213,38 @@ jobs:
               --network $NETWORK_NAME \
               --restart unless-stopped \
               -p 3000:3000 \
+              --memory="3g" \
+              --memory-reservation="1.5g" \
+              -e NODE_ENV=production \
+              -e PORT=3000 \
+              -e PDF_SERVICE_URL=http://python-pdf-service:8000 \
+              -e USE_PYTHON_PDF=true \
+              -e MISTRAL_API_KEY="${{ secrets.MISTRAL_API_KEY }}" \
+              -e EMBEDDINGS_MODEL_API_KEY="${{ secrets.EMBEDDINGS_MODEL_API_KEY }}" \
+              -e EMBEDDINGS_MODEL_ENDPOINT="${{ secrets.EMBEDDINGS_MODEL_ENDPOINT }}" \
+              -e EMBEDDINGS_MODEL_DEPLOYMENT_NAME="${{ secrets.EMBEDDINGS_MODEL_DEPLOYMENT_NAME }}" \
+              -e EMBEDDINGS_MODEL_API_VERSION="${{ secrets.EMBEDDINGS_MODEL_API_VERSION }}" \
+              -e LLM_API_KEY="${{ secrets.LLM_API_KEY }}" \
+              -e LLM_BASE_URL="${{ secrets.LLM_BASE_URL }}" \
+              -e LLM_MODEL="${{ secrets.LLM_MODEL }}" \
+              -e LLM_DEPLOYMENT_NAME="${{ secrets.LLM_DEPLOYMENT_NAME }}" \
+              -e LLM_SERVICE="${{ secrets.LLM_SERVICE }}" \
+              -e LLM_API_VERSION="${{ secrets.LLM_API_VERSION }}" \
+              -e HACKRX_AUTH_TOKEN="${{ secrets.HACKRX_AUTH_TOKEN }}" \
+              -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+              -e GIT_USER_EMAIL="ai@hackrx.com" \
+              -e GIT_USER_NAME="AI Assistant" \
+              -e GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git" \
+              --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:3000/healthcheck || exit 1" \
+              --health-interval=30s \
+              --health-timeout=10s \
+              --health-retries=3 \
+              --health-start-period=30s \
+              $MAIN_IMAGE
+              --name $MAIN_CONTAINER \
+              --network $NETWORK_NAME \
+              --restart unless-stopped \
+              -p 3000:3000 \
               -e NODE_ENV=production \
               -e PORT=3000 \
               -e PDF_SERVICE_URL=http://$PYTHON_CONTAINER:8000 \

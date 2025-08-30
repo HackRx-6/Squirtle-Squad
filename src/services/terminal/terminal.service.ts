@@ -134,6 +134,45 @@ export class TerminalService {
         changed: originalCommand !== cleanedCommand,
       });
 
+      // Special handling for Git push commands
+      if (command.includes("git push") && !command.includes("--set-upstream")) {
+        console.log("🔍 [Terminal] Detected git push command, checking for upstream issues");
+        
+        // Try to get current branch and check if upstream is configured
+        try {
+          const branchResult = await this.executeCommandInternal(
+            "git branch --show-current",
+            { ...options, timeout: 5000 },
+            Date.now()
+          );
+          
+          if (branchResult.success && branchResult.stdout.trim()) {
+            const currentBranch = branchResult.stdout.trim();
+            console.log(`🌿 [Terminal] Current branch: ${currentBranch}`);
+            
+            // Check if upstream is configured
+            const upstreamResult = await this.executeCommandInternal(
+              `git rev-parse --abbrev-ref ${currentBranch}@{upstream}`,
+              { ...options, timeout: 5000 },
+              Date.now()
+            );
+            
+            if (!upstreamResult.success) {
+              console.log("⚠️ [Terminal] No upstream configured, modifying push command");
+              // Modify the command to set upstream
+              if (command === "git push") {
+                command = `git push --set-upstream origin ${currentBranch}`;
+                console.log(`🔧 [Terminal] Modified command: ${command}`);
+              }
+            } else {
+              console.log(`✅ [Terminal] Upstream already configured: ${upstreamResult.stdout.trim()}`);
+            }
+          }
+        } catch (error) {
+          console.warn("⚠️ [Terminal] Could not check Git upstream configuration:", error);
+        }
+      }
+
       // Handle direct command execution
       const validationError = this.validateCommand(command);
       if (validationError) {
