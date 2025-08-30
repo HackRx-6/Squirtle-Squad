@@ -1,11 +1,9 @@
 import { ApiError } from "../utils/ApiError";
-import { ApiResponse } from "../utils/ApiResponse";
 import { sentryMonitoringService } from "../services/monitoring";
-
 import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
 import { webQA as webQAService } from "../services/webScraping";
-import { hackrxService } from "../services/webAutomation";
+import { hackrxService } from "../services/toolCalling";
 import { validateAuthToken } from "../middlewares/auth.middleware";
 
 export const toolsController = {

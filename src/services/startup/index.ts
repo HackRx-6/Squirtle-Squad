@@ -1,5 +1,5 @@
 import { loggingService } from "../logging";
-import { playwrightService } from "../webAutomation/playwright.service";
+import { playwrightService } from "../playwright/core.playwright";
 
 export class StartupService {
   private static instance: StartupService;

@@ -31,6 +31,13 @@ export interface WebAutomationResult {
   };
 }
 
+export interface PlaywrightServiceConfig {
+  defaultTimeout: number;
+  defaultViewport: { width: number; height: number };
+  headless: boolean;
+  maxConcurrentPages: number;
+}
+
 export interface WebAutomationRequest {
   url: string;
   actions: WebAutomationAction[];
@@ -56,11 +63,4 @@ export interface WebAutomationRequest {
       };
     };
   };
-}
-
-export interface PlaywrightServiceConfig {
-  defaultTimeout: number;
-  defaultViewport: { width: number; height: number };
-  headless: boolean;
-  maxConcurrentPages: number;
 }

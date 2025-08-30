@@ -1,2 +1,2 @@
-export { terminalService, TerminalService } from './terminal.service';
+export { terminalService, TerminalService } from './core.terminal';
 export * from './types';

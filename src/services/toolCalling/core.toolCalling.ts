@@ -1,29 +1,9 @@
 import { LLMService } from "../LLM/core.LLM";
-import { Config } from "../../config";
 import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
-import { playwrightService } from "./playwright.service";
+import { playwrightService } from "../playwright/core.playwright";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
-
-export interface HackRXRequest {
-  documents: string;
-  questions: string[];
-}
-
-export interface HackRXResponse {
-  answers: string[];
-  metadata?: {
-    documents?: string;
-    processedAt: number;
-    toolsUsed: boolean;
-  };
-}
-
-export interface HackRXError {
-  error: string;
-  errorType: "validation" | "timeout" | "llm" | "automation" | "unknown";
-  details?: any;
-}
+import type { HackRXRequest, HackRXResponse, HackRXError } from "./types";
 
 export class HackRXService {
   private static instance: HackRXService;

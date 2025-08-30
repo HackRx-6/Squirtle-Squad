@@ -96,9 +96,11 @@ export class PlaywrightService {
       });
 
       const startTime = Date.now();
-      
+
       // Use system Chromium in Docker/production environments
-      const isDocker = process.env.DOCKER_ENV === 'true' || process.env.NODE_ENV === 'production';
+      const isDocker =
+        process.env.DOCKER_ENV === "true" ||
+        process.env.NODE_ENV === "production";
       const launchOptions: any = {
         headless: this.config.headless,
         args: [
@@ -117,14 +119,17 @@ export class PlaywrightService {
 
       // In Docker or production, use system-installed Chromium
       if (isDocker) {
-        launchOptions.executablePath = '/usr/bin/chromium-browser';
-        this.logger.info("Using system Chromium browser in Docker/production environment", {
-          executablePath: launchOptions.executablePath,
-          dockerEnv: process.env.DOCKER_ENV,
-          nodeEnv: process.env.NODE_ENV
-        });
+        launchOptions.executablePath = "/usr/bin/chromium-browser";
+        this.logger.info(
+          "Using system Chromium browser in Docker/production environment",
+          {
+            executablePath: launchOptions.executablePath,
+            dockerEnv: process.env.DOCKER_ENV,
+            nodeEnv: process.env.NODE_ENV,
+          }
+        );
       }
-      
+
       this.browser = await chromium.launch(launchOptions);
 
       const launchTime = Date.now() - startTime;
@@ -392,7 +397,9 @@ export class PlaywrightService {
             });
           } else {
             this.logger.info("Scrolling to bottom of page", { actionId });
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)");
+            await page.evaluate(
+              "window.scrollTo(0, document.body.scrollHeight)"
+            );
             this.logger.info("Scrolled to bottom of page", { actionId });
           }
           break;

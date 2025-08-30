@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import { AppConfigService } from "../../config/app.config";
-import { playwrightService } from "../webAutomation";
+import { playwrightService } from "../playwright";
 import { terminalService } from "../terminal";
 
 type OpenAITool = OpenAI.Chat.Completions.ChatCompletionTool;

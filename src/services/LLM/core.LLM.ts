@@ -5,7 +5,10 @@ import { loggingService } from "../logging";
 import { streamingService } from "./streaming.LLM";
 import type { LLMProvider } from "./types";
 import type { TimerContext } from "../timer";
-import { runWithToolsIfRequested, getRecommendedToolChoice } from "./tools.LLM";
+import {
+  runWithToolsIfRequested,
+  getRecommendedToolChoice,
+} from "../tools/core.tools";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 
 export class LLMService implements LLMProvider {
