@@ -18,13 +18,28 @@ export interface WebAutomationAction {
     | "hover"
     | "fill_form"
     | "submit_form"
-    | "find_and_fill";
+    | "find_element"
+    | "get_text"
+    | "get_attribute"
+    | "set_checkbox"
+    | "select_option"
+    | "scroll_to_element"
+    | "wait_for_element";
   selector?: string;
   text?: string;
   url?: string;
   timeout?: number;
-  formData?: Record<string, string>;
-  submitSelector?: string;
+  options?: Record<string, any>;
+  // For form-specific actions
+  formData?: Record<string, string>; // For fill_form action
+  submitSelector?: string; // For submit_form action
+  // For selection actions
+  optionValue?: string | number; // For select_option action
+  checked?: boolean; // For set_checkbox action
+  // For retrieval actions
+  attributeName?: string; // For get_attribute action
+  // For wait actions
+  waitState?: 'attached' | 'detached' | 'visible' | 'hidden'; // For wait_for_element action
 }
 
 export interface WebAutomationOptions {
