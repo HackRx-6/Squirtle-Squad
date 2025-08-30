@@ -3,7 +3,7 @@ import { sentryMonitoringService } from "../services/monitoring";
 import { PromptInjectionProtectionService } from "../services/cleaning";
 import { globalTimerService } from "../services/timer";
 import { webQA as webQAService } from "../services/webScraping";
-import { hackrxService } from "../services/toolCalling";
+import { toolCallingService } from "../services/toolCalling";
 import { validateAuthToken } from "../middlewares/auth.middleware";
 
 export const toolsController = {
@@ -130,7 +130,7 @@ export const toolsController = {
           console.log("🚀 Starting HackRX processing with web automation");
 
           // Use the dedicated HackRX service with LLM and web automation tools
-          const result = await hackrxService.processHackRX(
+          const result = await toolCallingService.processToolCalling(
             { documents, questions },
             timerContext
           );

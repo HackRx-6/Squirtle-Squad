@@ -1,9 +1,9 @@
-export interface HackRXRequest {
+export interface ToolCallingRequest {
   documents: string;
   questions: string[];
 }
 
-export interface HackRXResponse {
+export interface ToolCallingResponse {
   answers: string[];
   metadata?: {
     documents?: string;
@@ -12,7 +12,7 @@ export interface HackRXResponse {
   };
 }
 
-export interface HackRXError {
+export interface ToolCallingError {
   error: string;
   errorType: "validation" | "timeout" | "llm" | "automation" | "unknown";
   details?: any;

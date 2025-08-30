@@ -3,33 +3,37 @@ import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
 import { playwrightService } from "../playwright/core.playwright";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
-import type { HackRXRequest, HackRXResponse, HackRXError } from "./types";
+import type {
+  ToolCallingRequest,
+  ToolCallingResponse,
+  ToolCallingError,
+} from "./types";
 
-export class HackRXService {
-  private static instance: HackRXService;
-  private logger = loggingService.createComponentLogger("HackRXService");
+export class ToolCallingService {
+  private static instance: ToolCallingService;
+  private logger = loggingService.createComponentLogger("ToolCallingService");
 
   private constructor() {
-    this.logger.info("HackRXService initialized");
+    this.logger.info("ToolCallingService initialized");
     // No need to instantiate LLMService here, we'll create the client directly
   }
 
-  public static getInstance(): HackRXService {
-    if (!HackRXService.instance) {
-      HackRXService.instance = new HackRXService();
+  public static getInstance(): ToolCallingService {
+    if (!ToolCallingService.instance) {
+      ToolCallingService.instance = new ToolCallingService();
       loggingService.info(
-        "HackRXService singleton instance created",
-        "HackRXService"
+        "ToolCallingService singleton instance created",
+        "ToolCallingService"
       );
     }
-    return HackRXService.instance;
+    return ToolCallingService.instance;
   }
 
-  private validateRequest(request: HackRXRequest): {
+  private validateRequest(request: ToolCallingRequest): {
     isValid: boolean;
-    error?: HackRXError;
+    error?: ToolCallingError;
   } {
-    this.logger.debug("Validating HackRX request", {
+    this.logger.debug("Validating ToolCalling request", {
       documents: request.documents,
       questionsCount: request.questions?.length || 0,
     });
@@ -277,16 +281,20 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
     return finalAnswers; // Ensure we don't have more answers than questions
   }
 
-  public async processHackRX(
-    request: HackRXRequest,
+  public async processToolCalling(
+    request: ToolCallingRequest,
     timerContext: TimerContext
-  ): Promise<{ success: boolean; data?: HackRXResponse; error?: HackRXError }> {
-    const sessionId = `hackrx_${Date.now()}_${Math.random()
+  ): Promise<{
+    success: boolean;
+    data?: ToolCallingResponse;
+    error?: ToolCallingError;
+  }> {
+    const sessionId = `toolCalling_${Date.now()}_${Math.random()
       .toString(36)
       .substr(2, 9)}`;
     const startTime = Date.now();
 
-    this.logger.info("Starting HackRX processing session", {
+    this.logger.info("Starting toolCalling processing session", {
       sessionId,
       documents: request.documents,
       questionsCount: request.questions.length,
@@ -346,7 +354,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
         loggingService.warn(
           "Prompt injection patterns detected and cleaned from documents",
-          "HackRXService",
+          "ToolCallingService",
           {
             sessionId,
             originalLength: originalDocuments.length,
@@ -434,7 +442,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
         loggingService.warn(
           "Prompt injection patterns detected and cleaned from questions",
-          "HackRXService",
+          "ToolCallingService",
           {
             sessionId,
             questionsCount: request.questions.length,
@@ -471,8 +479,8 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       }
 
       loggingService.info(
-        `Starting HackRX processing for ${request.documents}`,
-        "HackRXService",
+        `Starting toolCalling processing for ${request.documents}`,
+        "ToolCallingService",
         {
           sessionId,
           questionsCount: request.questions.length,
@@ -552,7 +560,10 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
           };
         }
 
-        loggingService.info("HackRX processing completed", "HackRXService");
+        loggingService.info(
+          "Tool Calling processing completed",
+          "ToolCallingService"
+        );
 
         // Parse the response to extract individual answers for each question
         this.logger.info("Parsing LLM response into individual answers", {
@@ -563,7 +574,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
           request.questions
         );
 
-        const result: HackRXResponse = {
+        const result: ToolCallingResponse = {
           answers,
           metadata: {
             documents: request.documents,
@@ -574,8 +585,8 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
         const totalProcessingTime = Date.now() - startTime;
         loggingService.info(
-          "HackRX processing completed successfully",
-          "HackRXService",
+          "Tool Calling processing completed successfully",
+          "ToolCallingService",
           {
             sessionId,
             questionsCount: request.questions.length,
@@ -585,7 +596,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
           }
         );
 
-        this.logger.info("HackRX session completed successfully", {
+        this.logger.info("Tool Calling session completed successfully", {
           sessionId,
           questionsCount: request.questions.length,
           answersCount: answers.length,
@@ -600,7 +611,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         };
       } catch (llmError: any) {
         const processingTime = Date.now() - startTime;
-        this.logger.error("LLM processing error in HackRX", {
+        this.logger.error("LLM processing error is Tool Calling", {
           sessionId,
           error: llmError.message,
           stack: llmError.stack,
@@ -608,8 +619,8 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         });
 
         loggingService.error(
-          "LLM processing error in HackRX",
-          "HackRXService",
+          "LLM processing error in Tool Calling",
+          "ToolCallingService",
           {
             sessionId,
             error: llmError.message,
@@ -627,7 +638,7 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       }
     } catch (error: any) {
       const processingTime = Date.now() - startTime;
-      this.logger.error("Unexpected error in HackRX processing", {
+      this.logger.error("Unexpected error in Tool Calling processing", {
         sessionId,
         error: error.message,
         stack: error.stack,
@@ -635,8 +646,8 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
       });
 
       loggingService.error(
-        "Unexpected error in HackRX processing",
-        "HackRXService",
+        "Unexpected error in Tool Calling processing",
+        "ToolCallingService",
         {
           sessionId,
           error: error.message,
@@ -656,17 +667,17 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
   // Cleanup method for graceful shutdown
   public async cleanup(): Promise<void> {
-    this.logger.info("Starting HackRXService cleanup");
+    this.logger.info("Starting ToolCallingService cleanup");
 
     try {
       await playwrightService.cleanup();
       this.logger.info("PlaywrightService cleanup completed");
     } catch (error) {
-      this.logger.error("Error during HackRXService cleanup", { error });
+      this.logger.error("Error during ToolCallingService cleanup", { error });
     }
 
-    this.logger.info("HackRXService cleanup completed");
+    this.logger.info("ToolCallingService cleanup completed");
   }
 }
 
-export const hackrxService = HackRXService.getInstance();
+export const toolCallingService = ToolCallingService.getInstance();
