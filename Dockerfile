@@ -1,7 +1,7 @@
-# Multi-stage build optimized for CI/CD with hnswlib-node support
-FROM oven/bun:1.2.21-alpine AS base
+# Multi-stage build optimized for CI/CD with aggressive caching
+FROM oven/bun:1.2.21-alpine AS alpine-base
 
-# Essential Alpine packages for native modules compilation (hnswlib-node requires Python for node-gyp)
+# Create a base image with all system dependencies (highly cacheable)
 RUN apk add --no-cache \
     python3 \
     python3-dev \
@@ -18,25 +18,28 @@ RUN apk add --no-cache \
     libgcc \
     git \
     bash \
-    # Playwright browser dependencies
+    && npm install -g node-gyp
+
+# Separate stage for Playwright dependencies (cacheable independently)
+FROM alpine-base AS playwright-base
+RUN apk add --no-cache \
     chromium \
     chromium-chromedriver \
     nss \
     freetype \
     freetype-dev \
     harfbuzz \
-    ca-certificates \
     ttf-freefont \
     font-noto \
     font-noto-cjk \
     font-noto-emoji
 
-# Install node-gyp globally to ensure proper native module building
-RUN npm install -g node-gyp
+# Dependencies installation stage (most cacheable)
+FROM playwright-base AS deps
 
 WORKDIR /app
 
-# Copy package files and install Node dependencies
+# Copy only package files first for maximum cache efficiency
 COPY package*.json bun.lockb* ./
 
 # Set environment variables for native module compilation
@@ -45,117 +48,88 @@ ENV CXX=g++
 ENV npm_config_build_from_source=true
 ENV npm_config_cache=/tmp/.npm
 
-# Install dependencies and handle native modules properly
+# Install dependencies (this layer will be cached unless package files change)
 RUN bun install --frozen-lockfile --ignore-scripts
 
-# Manually rebuild native modules to ensure compatibility (requires Python for node-gyp)
+# Native modules build stage (separate for better caching)
+FROM deps AS native-modules
+WORKDIR /app
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+
+# Rebuild native modules (cached separately from deps installation)
 RUN cd node_modules/hnswlib-node && \
     npm run rebuild && \
     echo "✅ hnswlib-node rebuilt successfully"
 
-# Install Playwright browsers
-RUN bunx playwright install chromium && \
-    echo "✅ Playwright browsers installed successfully"
-
 # Verify hnswlib-node installation
 RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded successfully'); } catch(e) { console.log('⚠️ hnswlib-node not available:', e.message); }"
 
-# Copy source code and build (excluding native modules from bundle)
+# Playwright installation stage (separate for independent caching)
+FROM native-modules AS playwright-install
+WORKDIR /app
+
+# Set Playwright to use system-installed Chromium and skip all downloads
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
+
+# Verify system browser is available
+RUN echo "� Verifying system Chromium installation..." && \
+    which chromium-browser && \
+    chromium-browser --version && \
+    echo "✅ System Chromium verified - skipping Playwright browser downloads"
+
+# Build stage (only rebuilds when source code changes)
+FROM playwright-install AS builder
+WORKDIR /app
+
+# Copy source code and build
 COPY . .
 RUN bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --external pdfjs-dist --external unpdf --splitting
 
-# Production stage - use Bun for production
-FROM oven/bun:1.2.21-alpine
-
-# Runtime packages including build tools for native modules (Python needed for node-gyp)
-RUN apk add --no-cache \
-    python3 \
-    py3-pip \
-    ca-certificates \
-    tzdata \
-    libstdc++ \
-    libgcc \
-    gcc \
-    g++ \
-    make \
-    build-base \
-    nodejs \
-    npm \
-    git \
-    bash \
-    # Playwright browser dependencies
-    chromium \
-    chromium-chromedriver \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    font-noto \
-    font-noto-cjk \
-    font-noto-emoji
-
-# Install node-gyp globally in production stage too
-RUN npm install -g node-gyp
+# Production stage - optimized runtime image
+FROM alpine-base AS production
 
 WORKDIR /app
 
-# Copy built application
-COPY --from=base /app/node_modules ./node_modules
-COPY --from=base /app/dist ./dist
-COPY --from=base /app/package.json ./
+# Copy only what's needed from previous stages
+COPY --from=playwright-install /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
 
-# Install Playwright browsers in production
-RUN bunx playwright install chromium && \
-    echo "✅ Playwright browsers installed in production"
+# Use system browser configuration (no additional downloads needed)
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV CHROMIUM_PATH=/usr/bin/chromium-browser
 
-# Verify that the native module was copied correctly
+# Verify that the native module works in production
 RUN ls -la node_modules/hnswlib-node/build/ || echo "No build directory found"
 
-# Rebuild native modules in production environment to ensure compatibility (requires Python)
-RUN cd node_modules/hnswlib-node && npm run rebuild
+# Quick verification instead of full rebuild in production
+RUN node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node verified in production'); } catch(e) { console.log('❌ hnswlib-node error in production:', e.message); exit(1); }"
 
-# Create symlinks for all the paths that hnswlib-node might look for
-RUN ARCH=$(uname -m) && \
-    NODE_VERSION=$(node -v | cut -d'.' -f1 | cut -d'v' -f2) && \
-    mkdir -p /app/build /app/lib/binding/node-v127-linux-${ARCH} /app/compiled/22.6.0/linux/${ARCH} && \
-    if [ -f node_modules/hnswlib-node/build/Release/addon.node ]; then \
-      cp node_modules/hnswlib-node/build/Release/addon.node /app/build/addon.node && \
-      cp node_modules/hnswlib-node/build/Release/addon.node /app/lib/binding/node-v127-linux-${ARCH}/addon.node && \
-      cp node_modules/hnswlib-node/build/Release/addon.node /app/compiled/22.6.0/linux/${ARCH}/addon.node && \
-      echo "✅ Native module copied to expected paths for architecture: ${ARCH}"; \
-    else \
-      echo "❌ Native module build failed"; \
-      exit 1; \
-    fi
-
-# Verify the rebuilt native module exists
-RUN ls -la node_modules/hnswlib-node/build/ && \
-    node -e "try { require('hnswlib-node'); console.log('✅ hnswlib-node loaded successfully in production stage'); } catch(e) { console.log('❌ hnswlib-node error in production stage:', e.message); }"
-
-# Copy source files needed at runtime
+# Copy essential runtime files
 COPY src ./src
 COPY scripts ./scripts
 
-# Make scripts executable
-RUN chmod +x scripts/*.sh
+# Make scripts executable and create logs directory
+RUN chmod +x scripts/*.sh && mkdir -p logs
 
-# Create logs directory
-RUN mkdir -p logs
-
-# Set up Git configuration
+# Set up Git configuration (lightweight)
 RUN bash ./scripts/setup-git.sh
 
-# Set up Git remote (you'll need to replace with your actual repository URL)
-# Note: This requires authentication - see deployment guide for setting up credentials
-ENV GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git"
-
-# Environment
+# Environment configuration
 ENV NODE_ENV=production
 ENV DOCKER_ENV=true
 ENV PORT=3000
-# Playwright configuration
+ENV GIT_REPO_URL="https://github.com/HackRx-6/Squirtle-Squad.git"
+
+# Consistent Playwright configuration
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROMIUM_PATH=/usr/bin/chromium-browser

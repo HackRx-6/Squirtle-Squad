@@ -12,9 +12,13 @@
     "build": "bun build src/index.ts --outdir ./dist --target node --external playwright --external chromium-bidi --external hnswlib-node --external @mistralai/mistralai --external electron --external officeparser --external pdfjs-dist --external unpdf --splitting --minify",
     "start": "bun run dist/index.js",
     "verify-pptx": "./scripts/verify-pptx-setup.sh",
+    "docker:build": "./scripts/fast-build.sh",
+    "docker:build-parallel": "./scripts/fast-build.sh --parallel",
+    "docker:warm-cache": "./scripts/warm-cache.sh",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "docker:build-optimized": "docker-compose -f docker-compose.build.yml build --parallel"
   },
   "peerDependencies": {
     "typescript": "^5"

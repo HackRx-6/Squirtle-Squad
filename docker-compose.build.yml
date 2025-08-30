@@ -1,0 +1,38 @@
+# Docker Compose for optimized builds with caching
+# Use: docker-compose -f docker-compose.build.yml build --parallel
+services:
+  # Python PDF/PPTX Extraction Service - Lightweight and fast
+  pdf-service:
+    build:
+      context: ./python-pdf-service
+      dockerfile: Dockerfile
+      cache_from:
+        - ghcr.io/hackrx-6/squirtle-squad-python-pdf:cache
+        - ghcr.io/hackrx-6/squirtle-squad-python-pdf:latest
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    image: ghcr.io/hackrx-6/squirtle-squad-python-pdf:latest
+
+  # Main Bun Application - Multi-stage build with aggressive caching
+  fantastic-robo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - ghcr.io/hackrx-6/squirtle-squad:cache-alpine-base
+        - ghcr.io/hackrx-6/squirtle-squad:cache-playwright-base
+        - ghcr.io/hackrx-6/squirtle-squad:cache-deps
+        - ghcr.io/hackrx-6/squirtle-squad:cache-native-modules
+        - ghcr.io/hackrx-6/squirtle-squad:cache-playwright-install
+        - ghcr.io/hackrx-6/squirtle-squad:cache-builder
+        - ghcr.io/hackrx-6/squirtle-squad:cache
+        - ghcr.io/hackrx-6/squirtle-squad:latest
+      target: production
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        # Enable BuildKit features
+        DOCKER_BUILDKIT: 1
+        BUILDX_EXPERIMENTAL: 1
+    image: ghcr.io/hackrx-6/squirtle-squad:latest
+    depends_on:
+      - pdf-service
