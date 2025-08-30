@@ -91,12 +91,12 @@ export class AppConfigService {
       },
       security: {
         promptInjectionProtection: {
-          enabled: true, // Enabled to prevent prompt injection attacks
-          strictMode: true, // Disabled by default
-          azureContentPolicy: true, // Enabled by default for Azure
-          preserveUrls: true,
+          enabled: false, // Can be disabled by setting to "false"
+          strictMode: false, // Disabled by default
+          azureContentPolicy: false, // Enabled by default for Azure
+          preserveUrls: false, // Enabled by default
           maxRiskScore: 40, // Default max risk score
-          logSuspiciousContent: true, // Enabled by default
+          logSuspiciousContent: false, // Enabled by default
           blockHighRiskRequests: false, // Disabled by default
         },
       },

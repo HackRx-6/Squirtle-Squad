@@ -3,6 +3,7 @@ import { loggingService } from "../logging";
 import type { TimerContext } from "../timer";
 import { playwrightService } from "../playwright";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
+import { AppConfigService } from "../../config/app.config";
 import type {
   ToolCallingRequest,
   ToolCallingResponse,
@@ -12,6 +13,7 @@ import type {
 export class ToolCallingService {
   private static instance: ToolCallingService;
   private logger = loggingService.createComponentLogger("ToolCallingService");
+  private appConfig = AppConfigService.getInstance();
 
   private constructor() {
     this.logger.info("ToolCallingService initialized");
@@ -27,6 +29,24 @@ export class ToolCallingService {
       );
     }
     return ToolCallingService.instance;
+  }
+
+  private shouldApplySanitization(): boolean {
+    const securityConfig = this.appConfig.getSecurityConfig();
+    return securityConfig.promptInjectionProtection.enabled;
+  }
+
+  private getSanitizationOptions() {
+    const securityConfig = this.appConfig.getSecurityConfig();
+    const pipConfig = securityConfig.promptInjectionProtection;
+
+    return {
+      strictMode: pipConfig.strictMode,
+      preserveFormatting: true,
+      logSuspiciousContent: pipConfig.logSuspiciousContent,
+      azureContentPolicy: pipConfig.azureContentPolicy,
+      preserveUrls: pipConfig.preserveUrls,
+    };
   }
 
   private validateRequest(request: ToolCallingRequest): {
@@ -324,140 +344,158 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
         };
       }
 
-      // Clean documents for prompt injection attacks
-      this.logger.debug("Cleaning documents for prompt injection", {
+      // Clean documents for prompt injection attacks (if enabled)
+      this.logger.debug("Checking if document sanitization should be applied", {
         sessionId,
       });
-      const originalDocuments = request.documents;
-      const cleanedDocuments = PromptInjectionProtectionService.sanitizeText(
-        request.documents,
-        {
-          strictMode: true,
-          preserveFormatting: true,
-          logSuspiciousContent: true,
-          azureContentPolicy: true,
-          preserveUrls: true,
+
+      let cleanedDocuments = request.documents;
+
+      if (this.shouldApplySanitization()) {
+        this.logger.debug("Cleaning documents for prompt injection", {
+          sessionId,
+        });
+        const originalDocuments = request.documents;
+        cleanedDocuments = PromptInjectionProtectionService.sanitizeText(
+          request.documents,
+          this.getSanitizationOptions()
+        );
+
+        // Check if any malicious content was detected and cleaned
+        if (originalDocuments !== cleanedDocuments) {
+          this.logger.warn(
+            "Potential prompt injection detected and cleaned in documents",
+            {
+              sessionId,
+              originalLength: originalDocuments.length,
+              cleanedLength: cleanedDocuments.length,
+              documentsPreview: originalDocuments.substring(0, 200) + "...",
+            }
+          );
+
+          loggingService.warn(
+            "Prompt injection patterns detected and cleaned from documents",
+            "ToolCallingService",
+            {
+              sessionId,
+              originalLength: originalDocuments.length,
+              cleanedLength: cleanedDocuments.length,
+            }
+          );
         }
-      );
 
-      // Check if any malicious content was detected and cleaned
-      if (originalDocuments !== cleanedDocuments) {
-        this.logger.warn(
-          "Potential prompt injection detected and cleaned in documents",
-          {
-            sessionId,
-            originalLength: originalDocuments.length,
-            cleanedLength: cleanedDocuments.length,
-            documentsPreview: originalDocuments.substring(0, 200) + "...",
-          }
-        );
-
-        loggingService.warn(
-          "Prompt injection patterns detected and cleaned from documents",
-          "ToolCallingService",
-          {
-            sessionId,
-            originalLength: originalDocuments.length,
-            cleanedLength: cleanedDocuments.length,
-          }
-        );
+        this.logger.info("Document cleaning completed", {
+          sessionId,
+          originalLength: originalDocuments.length,
+          cleanedLength: cleanedDocuments.length,
+          changed: originalDocuments !== cleanedDocuments,
+        });
+      } else {
+        this.logger.info("Document sanitization skipped (disabled in config)", {
+          sessionId,
+        });
       }
 
       // Update request with cleaned documents
       request.documents = cleanedDocuments;
 
-      this.logger.info("Document cleaning completed", {
-        sessionId,
-        originalLength: originalDocuments.length,
-        cleanedLength: cleanedDocuments.length,
-        changed: originalDocuments !== cleanedDocuments,
-      });
+      // Clean questions for prompt injection attacks (if enabled)
+      this.logger.debug(
+        "Checking if questions sanitization should be applied",
+        {
+          sessionId,
+        }
+      );
 
-      // Clean questions for prompt injection attacks
-      this.logger.debug("Cleaning questions for prompt injection", {
-        sessionId,
-      });
-      const originalQuestions = [...request.questions];
-      const cleanedQuestions: string[] = [];
+      let cleanedQuestions: string[] = [];
       let questionsChanged = false;
 
-      for (let i = 0; i < request.questions.length; i++) {
-        const originalQuestion = request.questions[i];
-        if (typeof originalQuestion !== "string") {
-          this.logger.error(
-            `Question ${i + 1} is not a string during cleaning`,
-            {
-              sessionId,
-              questionIndex: i + 1,
-              questionType: typeof originalQuestion,
-            }
+      if (this.shouldApplySanitization()) {
+        this.logger.debug("Cleaning questions for prompt injection", {
+          sessionId,
+        });
+        const originalQuestions = [...request.questions];
+
+        for (let i = 0; i < request.questions.length; i++) {
+          const originalQuestion = request.questions[i];
+          if (typeof originalQuestion !== "string") {
+            this.logger.error(
+              `Question ${i + 1} is not a string during cleaning`,
+              {
+                sessionId,
+                questionIndex: i + 1,
+                questionType: typeof originalQuestion,
+              }
+            );
+            continue;
+          }
+
+          const cleanedQuestion = PromptInjectionProtectionService.sanitizeText(
+            originalQuestion,
+            this.getSanitizationOptions()
           );
-          continue;
+
+          cleanedQuestions.push(cleanedQuestion);
+
+          if (originalQuestion !== cleanedQuestion) {
+            questionsChanged = true;
+            this.logger.warn(
+              `Potential prompt injection detected and cleaned in question ${
+                i + 1
+              }`,
+              {
+                sessionId,
+                questionIndex: i + 1,
+                originalLength: originalQuestion.length,
+                cleanedLength: cleanedQuestion.length,
+                questionPreview: originalQuestion.substring(0, 100) + "...",
+              }
+            );
+          }
         }
 
-        const cleanedQuestion = PromptInjectionProtectionService.sanitizeText(
-          originalQuestion,
-          {
-            strictMode: true,
-            preserveFormatting: true,
-            logSuspiciousContent: true,
-            azureContentPolicy: true,
-            preserveUrls: true,
-          }
-        );
-
-        cleanedQuestions.push(cleanedQuestion);
-
-        if (originalQuestion !== cleanedQuestion) {
-          questionsChanged = true;
+        if (questionsChanged) {
           this.logger.warn(
-            `Potential prompt injection detected and cleaned in question ${
-              i + 1
-            }`,
+            "Prompt injection patterns detected and cleaned from questions",
             {
               sessionId,
-              questionIndex: i + 1,
-              originalLength: originalQuestion.length,
-              cleanedLength: cleanedQuestion.length,
-              questionPreview: originalQuestion.substring(0, 100) + "...",
+              questionsCount: request.questions.length,
+              originalQuestions: originalQuestions.map(
+                (q) => q.substring(0, 50) + "..."
+              ),
+              cleanedQuestions: cleanedQuestions.map(
+                (q) => q.substring(0, 50) + "..."
+              ),
+            }
+          );
+
+          loggingService.warn(
+            "Prompt injection patterns detected and cleaned from questions",
+            "ToolCallingService",
+            {
+              sessionId,
+              questionsCount: request.questions.length,
             }
           );
         }
-      }
 
-      if (questionsChanged) {
-        this.logger.warn(
-          "Prompt injection patterns detected and cleaned from questions",
+        this.logger.info("Question cleaning completed", {
+          sessionId,
+          questionsCount: request.questions.length,
+          changed: questionsChanged,
+        });
+      } else {
+        this.logger.info(
+          "Questions sanitization skipped (disabled in config)",
           {
             sessionId,
-            questionsCount: request.questions.length,
-            originalQuestions: originalQuestions.map(
-              (q) => q.substring(0, 50) + "..."
-            ),
-            cleanedQuestions: cleanedQuestions.map(
-              (q) => q.substring(0, 50) + "..."
-            ),
           }
         );
-
-        loggingService.warn(
-          "Prompt injection patterns detected and cleaned from questions",
-          "ToolCallingService",
-          {
-            sessionId,
-            questionsCount: request.questions.length,
-          }
-        );
+        cleanedQuestions = [...request.questions];
       }
 
       // Update request with cleaned questions
       request.questions = cleanedQuestions;
-
-      this.logger.info("Question cleaning completed", {
-        sessionId,
-        questionsCount: request.questions.length,
-        changed: questionsChanged,
-      });
 
       // Check timeout before processing
       if (timerContext.isExpired) {
