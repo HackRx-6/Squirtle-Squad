@@ -108,6 +108,8 @@ export interface ElementFindOptions {
   timeout?: number;
   exact?: boolean;
   caseSensitive?: boolean;
+  visible?: boolean;
+  enabled?: boolean;
 }
 
 export interface BrowserAutomationOptions {
@@ -132,6 +134,25 @@ export interface NavigationOptions {
 export interface WaitOptions {
   timeout?: number;
   state?: "attached" | "detached" | "visible" | "hidden";
+}
+
+/**
+ * Convert legacy ElementFindOptions to StructuredElementSelector options
+ */
+function convertElementFindOptions(
+  options?: ElementFindOptions
+): Partial<StructuredElementSelector> | undefined {
+  if (!options) return undefined;
+
+  return {
+    options: {
+      timeout: options.timeout,
+      exact: options.exact,
+      caseSensitive: options.caseSensitive,
+      visible: options.visible,
+      enabled: options.enabled,
+    },
+  };
 }
 
 /**
@@ -619,7 +640,7 @@ export class BrowserAutomation {
       stopOnError,
       timeout: options.timeout,
       retryCount: options.retryCount,
-      elementFindOptions: options.elementFindOptions,
+      elementFindOptions: convertElementFindOptions(options.elementFindOptions),
       ...options.inputFillOptions,
     });
 
@@ -793,7 +814,7 @@ export class BrowserAutomation {
     const result = await inputFiller.selectOption(page, identifier, option, {
       timeout: options.timeout,
       retryCount: options.retryCount,
-      elementFindOptions: options.elementFindOptions,
+      elementFindOptions: convertElementFindOptions(options.elementFindOptions),
     });
 
     if (!result.success) {
@@ -823,7 +844,7 @@ export class BrowserAutomation {
     const result = await inputFiller.setCheckbox(page, identifier, checked, {
       timeout: options.timeout,
       retryCount: options.retryCount,
-      elementFindOptions: options.elementFindOptions,
+      elementFindOptions: convertElementFindOptions(options.elementFindOptions),
     });
 
     if (!result.success) {

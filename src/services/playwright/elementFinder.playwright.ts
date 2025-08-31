@@ -134,6 +134,32 @@ export interface ElementFindResult {
  *
  * Supports structured selectors that LLMs can generate consistently, providing
  * multiple fallback strategies and context-aware element location.
+ * 
+ * 🚨 CRITICAL FIX: Enhanced DOM Distillation for Multiple Element Disambiguation
+ * 
+ * This implementation solves the "Exit vs Submit button" problem through:
+ * 
+ * 1. **Robust Rule-Based Selection**: Primary disambiguation logic that heavily
+ *    penalizes semantically opposite actions (Exit when looking for Submit)
+ * 
+ * 2. **Confidence-Based Strategy**: Uses rule-based selection for high-confidence
+ *    cases (>70%) and only falls back to LLM for ambiguous cases
+ * 
+ * 3. **Enhanced Scoring System**: 
+ *    - +25 points for exact text matches
+ *    - +20 points for semantic action matches (Submit button for submit action)
+ *    - -50 points penalty for opposite actions (Exit button when looking for Submit)
+ *    - +15 points for correct button types (type="submit")
+ *    - +10 points for proper context (submit buttons in forms)
+ * 
+ * 4. **Critical Action Protection**: Special handling for critical actions like
+ *    Submit, Save, Continue to prevent catastrophic wrong button clicks
+ * 
+ * 5. **Detailed Logging**: Comprehensive logging shows exactly why each element
+ *    was scored and which one was selected for debugging
+ * 
+ * This prevents the agent from getting stuck in loops by clicking "Exit" instead
+ * of "Submit" buttons, which was the core issue causing automation failures.
  */
 export class ElementFinder {
   private logger = loggingService.createComponentLogger(
@@ -613,48 +639,86 @@ export class ElementFinder {
     // Step 1: Distill element information
     const distilledElements = await this.distillElementInformation(elements);
     
-    // Step 2: Use LLM to select the best element
-    const selectedIndex = await this.selectBestElement(
-      distilledElements,
-      selectorConfig,
-      strategy
-    );
+    console.log("\n📊 [ElementFinder] DISTILLED ELEMENT INFORMATION:");
+    distilledElements.forEach((element, index) => {
+      console.log(`Element ${index + 1}:`);
+      console.log(`  Text: "${element.textContent}"`);
+      console.log(`  Tag: ${element.context.tagName}`);
+      console.log(`  Attributes:`, element.attributes);
+      console.log(`  Parent: ${element.context.parentInfo}`);
+    });
 
-    if (selectedIndex !== -1 && selectedIndex < elements.length) {
-      console.log(`✅ [ElementFinder] LLM selected element ${selectedIndex + 1}`);
-      const selectedElement = elements[selectedIndex];
-      if (selectedElement) {
-        const selector = await this.buildElementSelector(selectedElement);
-        
-        return {
-          element: selectedElement,
-          strategy: `${strategy}-llm-disambiguated`,
-          selector,
-          found: true,
-          confidence: 85, // High confidence due to LLM reasoning
-        };
-      }
-    }
-
-    console.log("❌ [ElementFinder] LLM disambiguation failed, using rule-based fallback");
-    
-    // Use rule-based selection as fallback instead of just picking the first element
+    // Step 2: Always run rule-based selection first as it's more reliable
     const ruleBasedIndex = this.ruleBasedSelection(distilledElements, selectorConfig);
-    if (ruleBasedIndex >= 0 && ruleBasedIndex < elements.length) {
-      console.log(`🎯 [ElementFinder] Rule-based selection chose element ${ruleBasedIndex + 1}`);
+    console.log(`\n🎯 [ElementFinder] Rule-based selection chose element ${ruleBasedIndex + 1}`);
+    
+    // Step 3: Validate rule-based selection with confidence scoring
+    const ruleBasedConfidence = this.calculateSelectionConfidence(
+      distilledElements[ruleBasedIndex], 
+      selectorConfig, 
+      distilledElements
+    );
+    
+    console.log(`📊 [ElementFinder] Rule-based confidence: ${ruleBasedConfidence}%`);
+    
+    // If rule-based selection has high confidence (>70%), use it
+    if (ruleBasedConfidence >= 70 && ruleBasedIndex >= 0 && ruleBasedIndex < elements.length) {
       const selectedElement = elements[ruleBasedIndex];
       if (selectedElement) {
+        console.log(`✅ [ElementFinder] Using high-confidence rule-based selection`);
         return {
           element: selectedElement,
-          strategy: `${strategy}-rule-based`,
+          strategy: `${strategy}-rule-based-high-confidence`,
           selector: await this.buildElementSelector(selectedElement),
           found: true,
-          confidence: 70, // Medium confidence
+          confidence: ruleBasedConfidence,
+        };
+      }
+    }
+    
+    // Step 4: Try LLM disambiguation only for lower confidence cases
+    try {
+      const selectedIndex = await this.selectBestElement(
+        distilledElements,
+        selectorConfig,
+        strategy
+      );
+
+      if (selectedIndex !== -1 && selectedIndex < elements.length) {
+        console.log(`✅ [ElementFinder] LLM selected element ${selectedIndex + 1}`);
+        const selectedElement = elements[selectedIndex];
+        if (selectedElement) {
+          const selector = await this.buildElementSelector(selectedElement);
+          
+          return {
+            element: selectedElement,
+            strategy: `${strategy}-llm-disambiguated`,
+            selector,
+            found: true,
+            confidence: 85, // High confidence due to LLM reasoning
+          };
+        }
+      }
+    } catch (error) {
+      console.log("❌ [ElementFinder] LLM disambiguation failed:", error);
+    }
+
+    // Step 5: Fall back to rule-based selection even with lower confidence
+    if (ruleBasedIndex >= 0 && ruleBasedIndex < elements.length) {
+      const selectedElement = elements[ruleBasedIndex];
+      if (selectedElement) {
+        console.log(`🔄 [ElementFinder] Falling back to rule-based selection`);
+        return {
+          element: selectedElement,
+          strategy: `${strategy}-rule-based-fallback`,
+          selector: await this.buildElementSelector(selectedElement),
+          found: true,
+          confidence: Math.max(ruleBasedConfidence, 50), // Ensure minimum confidence
         };
       }
     }
 
-    // Only if everything fails, fall back to the first element
+    // Step 6: Only if everything fails, fall back to the first element
     console.log("⚠️ [ElementFinder] All disambiguation methods failed, using first element as last resort");
     const fallbackElement = elements[0];
     if (fallbackElement) {
@@ -663,7 +727,7 @@ export class ElementFinder {
         strategy: `${strategy}-fallback-first`,
         selector: await this.buildElementSelector(fallbackElement),
         found: true,
-        confidence: 40, // Low confidence
+        confidence: 30, // Very low confidence
       };
     }
 
@@ -851,9 +915,23 @@ export class ElementFinder {
   ): string {
     const targetDescription = JSON.stringify(selectorConfig.identifier, null, 2);
     
-    let prompt = `I found ${distilledElements.length} elements that match the selector for a ${selectorConfig.type} element. `;
-    prompt += `The target element should match: ${targetDescription}\n\n`;
-    prompt += `Please analyze each option and select the most appropriate element:\n\n`;
+    let prompt = `CRITICAL WEB AUTOMATION ELEMENT DISAMBIGUATION\n\n`;
+    prompt += `I found ${distilledElements.length} elements that match the selector for a ${selectorConfig.type} element.\n`;
+    prompt += `Target criteria: ${targetDescription}\n\n`;
+    
+    // Add specific guidance for common disambiguation scenarios
+    const targetText = selectorConfig.identifier.text?.toLowerCase() || '';
+    if (targetText.includes('submit')) {
+      prompt += `⚠️ CRITICAL: This is a SUBMIT action. You must avoid Exit/Cancel/Close buttons at all costs!\n`;
+      prompt += `Look for buttons with text exactly matching "Submit" or buttons with type="submit".\n`;
+      prompt += `NEVER select Exit, Cancel, Close, Back, or similar negative actions.\n\n`;
+    } else if (targetText.includes('save')) {
+      prompt += `⚠️ CRITICAL: This is a SAVE action. Avoid Delete/Cancel/Discard buttons.\n\n`;
+    } else if (targetText.includes('continue') || targetText.includes('next')) {
+      prompt += `⚠️ CRITICAL: This is a FORWARD action. Avoid Back/Previous/Cancel buttons.\n\n`;
+    }
+
+    prompt += `ELEMENT OPTIONS:\n\n`;
 
     distilledElements.forEach((element, index) => {
       prompt += `Element ${index + 1}:\n`;
@@ -862,16 +940,28 @@ export class ElementFinder {
       prompt += `  Attributes: ${JSON.stringify(element.attributes, null, 4)}\n`;
       prompt += `  Parent: ${element.context.parentInfo}\n`;
       prompt += `  Position: ${element.context.siblingInfo}\n`;
-      prompt += `  Screen Position: (${element.context.position.x}, ${element.context.position.y})\n\n`;
+      prompt += `  Screen Position: (${element.context.position.x}, ${element.context.position.y})\n`;
+      
+      // Add warning flags for problematic buttons
+      if (targetText.includes('submit') && 
+          (element.textContent.toLowerCase().includes('exit') || 
+           element.textContent.toLowerCase().includes('cancel') ||
+           element.textContent.toLowerCase().includes('close'))) {
+        prompt += `  ⚠️ WARNING: This appears to be a negative action button - NOT suitable for submit!\n`;
+      }
+      prompt += `\n`;
     });
 
-    prompt += `Based on the target criteria and context, which element (1-${distilledElements.length}) is the most appropriate? `;
-    prompt += `Consider:\n`;
-    prompt += `1. Text content relevance\n`;
-    prompt += `2. Attribute matching\n`;
-    prompt += `3. Contextual appropriateness (parent elements, position)\n`;
-    prompt += `4. Typical UI patterns\n\n`;
-    prompt += `Respond with only the number of the best element (1-${distilledElements.length}).`;
+    prompt += `SELECTION CRITERIA (in priority order):\n`;
+    prompt += `1. EXACT text match with target\n`;
+    prompt += `2. Avoid buttons with conflicting semantics (Exit vs Submit)\n`;
+    prompt += `3. Prefer buttons with type="submit" for submit actions\n`;
+    prompt += `4. Consider parent context (forms for submit buttons)\n`;
+    prompt += `5. Check CSS classes for semantic hints (primary, secondary, danger)\n`;
+    prompt += `6. Element position and visibility\n\n`;
+
+    prompt += `RESPOND WITH ONLY THE NUMBER (1-${distilledElements.length}) of the most appropriate element.\n`;
+    prompt += `If unsure, prioritize exact text matches and avoid semantically opposite actions.`;
 
     return prompt;
   }
@@ -887,71 +977,103 @@ export class ElementFinder {
     let bestScore = -1;
     let bestIndex = 0;
 
+    console.log(`\n🎯 [ElementFinder] RULE-BASED SELECTION ANALYSIS:`);
+
     distilledElements.forEach((element, index) => {
       let score = 0;
+      const scoreBreakdown: string[] = [];
 
       // Score based on text content match
       if (identifier.text && element.textContent.includes(identifier.text)) {
         score += 10;
+        scoreBreakdown.push(`text match (+10)`);
         
         // Special handling for common button scenarios
-        if (selectorConfig.type === 'button') {
-          const text = element.textContent.toLowerCase();
-          const targetText = identifier.text.toLowerCase();
+        if (selectorConfig.type === 'button' || element.context.tagName === 'button') {
+          const text = element.textContent.toLowerCase().trim();
+          const targetText = identifier.text.toLowerCase().trim();
           
           // Heavily favor exact matches for critical actions
           if (text === targetText) {
-            score += 20;
+            score += 25;
+            scoreBreakdown.push(`exact text match (+25)`);
           }
           
-          // Prioritize positive actions over negative ones
-          if (targetText.includes('submit') && text.includes('submit')) {
-            score += 15; // Strong preference for submit buttons
-          } else if (targetText.includes('submit') && (text.includes('exit') || text.includes('cancel') || text.includes('close'))) {
-            score -= 10; // Penalize negative actions when looking for submit
+          // Critical: Handle Submit vs Exit disambiguation
+          if (targetText.includes('submit')) {
+            if (text.includes('submit')) {
+              score += 20;
+              scoreBreakdown.push(`submit button match (+20)`);
+            } else if (text.includes('exit') || text.includes('cancel') || text.includes('close') || text.includes('back')) {
+              score -= 50; // Heavy penalty for negative actions when looking for submit
+              scoreBreakdown.push(`negative action penalty (-50)`);
+            }
           }
           
           // Similar logic for other action types
-          if (targetText.includes('save') && text.includes('save')) {
-            score += 15;
-          } else if (targetText.includes('save') && (text.includes('delete') || text.includes('cancel'))) {
-            score -= 10;
+          if (targetText.includes('save')) {
+            if (text.includes('save')) {
+              score += 20;
+              scoreBreakdown.push(`save button match (+20)`);
+            } else if (text.includes('delete') || text.includes('cancel') || text.includes('discard')) {
+              score -= 30;
+              scoreBreakdown.push(`destructive action penalty (-30)`);
+            }
+          }
+          
+          if (targetText.includes('continue') || targetText.includes('next')) {
+            if (text.includes('continue') || text.includes('next') || text.includes('proceed')) {
+              score += 20;
+              scoreBreakdown.push(`continue action match (+20)`);
+            } else if (text.includes('back') || text.includes('previous') || text.includes('cancel')) {
+              score -= 30;
+              scoreBreakdown.push(`backward action penalty (-30)`);
+            }
           }
         }
       }
       
       if (identifier.textContains && element.textContent.includes(identifier.textContains)) {
         score += 8;
+        scoreBreakdown.push(`text contains (+8)`);
       }
 
       // Score based on attribute matches
       if (identifier.id && element.attributes.id === identifier.id) {
         score += 15;
+        scoreBreakdown.push(`id match (+15)`);
       }
       if (identifier.name && element.attributes.name === identifier.name) {
         score += 12;
+        scoreBreakdown.push(`name match (+12)`);
       }
       if (identifier.className && element.attributes.class?.includes(identifier.className)) {
         score += 8;
+        scoreBreakdown.push(`class match (+8)`);
       }
       if (identifier.classContains && element.attributes.class?.includes(identifier.classContains)) {
         score += 6;
+        scoreBreakdown.push(`class contains (+6)`);
       }
       if (identifier.testId && element.attributes['data-testid'] === identifier.testId) {
         score += 15;
+        scoreBreakdown.push(`testId match (+15)`);
       }
       if (identifier.placeholder && element.attributes.placeholder === identifier.placeholder) {
         score += 10;
+        scoreBreakdown.push(`placeholder match (+10)`);
       }
       if (identifier.ariaLabel && element.attributes['aria-label'] === identifier.ariaLabel) {
         score += 10;
+        scoreBreakdown.push(`aria-label match (+10)`);
       }
 
       // Additional button-specific scoring
-      if (selectorConfig.type === 'button' && element.attributes.type) {
+      if ((selectorConfig.type === 'button' || element.context.tagName === 'button') && element.attributes.type) {
         const buttonType = element.attributes.type.toLowerCase();
         if (buttonType === 'submit' && identifier.text?.toLowerCase().includes('submit')) {
-          score += 12; // Favor submit type buttons when looking for submit
+          score += 15; // Strong favor for submit type buttons when looking for submit
+          scoreBreakdown.push(`submit type button (+15)`);
         }
       }
 
@@ -960,19 +1082,45 @@ export class ElementFinder {
         const parentInfo = element.context.parentInfo.toLowerCase();
         // Prefer buttons inside forms when looking for submit
         if (parentInfo.includes('form') && identifier.text?.toLowerCase().includes('submit')) {
+          score += 10;
+          scoreBreakdown.push(`form context (+10)`);
+        }
+        
+        // Prefer buttons in action areas for action buttons
+        if ((parentInfo.includes('action') || parentInfo.includes('button') || parentInfo.includes('control')) && 
+            (identifier.text?.toLowerCase().includes('submit') || identifier.text?.toLowerCase().includes('save'))) {
+          score += 5;
+          scoreBreakdown.push(`action context (+5)`);
+        }
+      }
+
+      // CSS class hints for button priority
+      if (element.attributes.class) {
+        const classes = element.attributes.class.toLowerCase();
+        if (classes.includes('primary') || classes.includes('main') || classes.includes('submit')) {
           score += 8;
+          scoreBreakdown.push(`primary class (+8)`);
+        } else if (classes.includes('secondary') || classes.includes('cancel') || classes.includes('danger')) {
+          score -= 5;
+          scoreBreakdown.push(`secondary class (-5)`);
         }
       }
 
       // Prefer elements that are visible and well-positioned
       if (element.context.position.x > 0 && element.context.position.y > 0) {
         score += 2;
+        scoreBreakdown.push(`visible position (+2)`);
       }
 
-      // Prefer elements with more specific attributes
-      score += Object.keys(element.attributes).length * 0.5;
+      // Prefer elements with more specific attributes (indicates intentional design)
+      const attributeBonus = Math.min(Object.keys(element.attributes).length * 0.5, 3);
+      if (attributeBonus > 0) {
+        score += attributeBonus;
+        scoreBreakdown.push(`attribute richness (+${attributeBonus})`);
+      }
 
-      console.log(`🔍 [ElementFinder] Element ${index + 1} ("${element.textContent}") score: ${score}`);
+      console.log(`Element ${index + 1} ("${element.textContent.substring(0, 30)}") score: ${score}`);
+      console.log(`  Breakdown: ${scoreBreakdown.join(', ')}`);
 
       if (score > bestScore) {
         bestScore = score;
@@ -980,8 +1128,71 @@ export class ElementFinder {
       }
     });
 
-    console.log(`🎯 [ElementFinder] Rule-based selection: Element ${bestIndex + 1} (score: ${bestScore})`);
+    console.log(`\n� [ElementFinder] Rule-based selection: Element ${bestIndex + 1} (score: ${bestScore})`);
+    console.log(`    Selected: "${distilledElements[bestIndex]?.textContent?.substring(0, 50)}"`);
+    
     return bestIndex;
+  }
+
+  /**
+   * Calculate confidence score for a selected element
+   */
+  private calculateSelectionConfidence(
+    selectedElement: any,
+    selectorConfig: StructuredElementSelector,
+    allElements: Array<any>
+  ): number {
+    if (!selectedElement) return 0;
+    
+    let confidence = 50; // Base confidence
+    const identifier = selectorConfig.identifier;
+    
+    // Exact text match boosts confidence significantly
+    if (identifier.text && selectedElement.textContent === identifier.text) {
+      confidence += 30;
+    } else if (identifier.text && selectedElement.textContent.includes(identifier.text)) {
+      confidence += 20;
+    }
+    
+    // Exact attribute matches boost confidence
+    if (identifier.id && selectedElement.attributes.id === identifier.id) {
+      confidence += 25;
+    }
+    if (identifier.testId && selectedElement.attributes['data-testid'] === identifier.testId) {
+      confidence += 25;
+    }
+    if (identifier.name && selectedElement.attributes.name === identifier.name) {
+      confidence += 20;
+    }
+    
+    // Button type matching for submit buttons
+    if (selectorConfig.type === 'button' && identifier.text?.toLowerCase().includes('submit')) {
+      if (selectedElement.attributes.type === 'submit') {
+        confidence += 20;
+      }
+      // Penalize if it's an exit/cancel button when looking for submit
+      const text = selectedElement.textContent.toLowerCase();
+      if (text.includes('exit') || text.includes('cancel') || text.includes('close')) {
+        confidence -= 30;
+      }
+    }
+    
+    // Form context for submit buttons
+    if (identifier.text?.toLowerCase().includes('submit') && 
+        selectedElement.context.parentInfo?.includes('form')) {
+      confidence += 15;
+    }
+    
+    // Reduce confidence if there are many similar elements (ambiguous)
+    const similarElements = allElements.filter(el => 
+      el.textContent.toLowerCase().includes(selectedElement.textContent.toLowerCase()) ||
+      el.context.tagName === selectedElement.context.tagName
+    );
+    if (similarElements.length > 2) {
+      confidence -= 10;
+    }
+    
+    return Math.min(Math.max(confidence, 0), 100); // Clamp between 0-100
   }
 
   /**
