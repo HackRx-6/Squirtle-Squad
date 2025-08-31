@@ -8,7 +8,7 @@ import {
   GENERIC_MULTI_TOOL_PROMPT,
   INTELLIGENT_TOOL_PROMPT,
   AUTONOMOUS_CODING_PROMPT,
-  AUTONOMOUS_WEB_AGENT_PROMPT_MINI,
+  AUTONOMOUS_WEB_AGENT_PROMPT,
 } from "../../prompts/prompts";
 import type {
   ToolCallingRequest,
@@ -265,7 +265,7 @@ export class ToolCallingService {
 
     switch (promptType) {
       case "web":
-        selectedPrompt = AUTONOMOUS_WEB_AGENT_PROMPT_MINI;
+        selectedPrompt = AUTONOMOUS_WEB_AGENT_PROMPT;
         console.log("✅ Using AUTONOMOUS_WEB_AGENT_PROMPT from prompts.ts");
         break;
       case "intelligent":
