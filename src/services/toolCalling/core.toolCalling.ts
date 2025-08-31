@@ -9,7 +9,7 @@ import {
   INTELLIGENT_TOOL_PROMPT,
   AUTONOMOUS_CODING_PROMPT,
   AUTONOMOUS_WEB_AGENT_PROMPT,
-} from "../../prompts/prompts";
+} from "../../prompts/prompt_tools";
 import type {
   ToolCallingRequest,
   ToolCallingResponse,

@@ -5,7 +5,7 @@ import { EmbeddingService } from "../embeddings";
 import { BatchedEmbeddingService } from "../embeddings";
 import { LLMService } from "../LLM/core.LLM";
 import { streamingService } from "../LLM";
-import { FANTASTIC_ROBO_SYSTEM_PROMPT } from "../../prompts/prompt8";
+import { FANTASTIC_ROBO_SYSTEM_PROMPT } from "../../prompts/prompt_RAG";
 import { urlDetection as urlDetectionService } from "../webScraping";
 import type { DocumentChunk, QuestionAnswer } from "../../types/document.types";
 import type { TimerContext } from "../timer";
@@ -1018,7 +1018,7 @@ export class InMemoryQAService {
               )
               .join("\n");
 
-            const systemPrompt =  FANTASTIC_ROBO_SYSTEM_PROMPT;
+            const systemPrompt = FANTASTIC_ROBO_SYSTEM_PROMPT;
             const userMessage = `Context:\n${context}\n\nQuestion: ${question}`;
 
             return {
