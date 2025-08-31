@@ -292,6 +292,20 @@ export class BrowserAutomation {
       force,
     });
 
+    console.log("\n🖱️ [BrowserAutomation] CLICK ACTION:");
+    console.log("▪".repeat(60));
+    console.log("🎯 Target Element:", identifier);
+    console.log("🔍 Legacy Selector:", identifier);
+    console.log(
+      "🏗️ Structured Selector:",
+      JSON.stringify(structuredSelector, null, 2)
+    );
+    console.log("🖱️ Button:", button);
+    console.log("🔢 Click Count:", clickCount);
+    console.log("⏱️ Delay:", delay + "ms");
+    console.log("💪 Force Click:", force);
+    console.log("▪".repeat(60));
+
     for (let attempt = 1; attempt <= retryCount; attempt++) {
       try {
         this.logger.debug(`Click attempt ${attempt}/${retryCount}`, {
@@ -335,6 +349,16 @@ export class BrowserAutomation {
           selector: findResult.selector,
           attempt,
         });
+
+        console.log("\n✅ [BrowserAutomation] CLICK SUCCESS:");
+        console.log("▪".repeat(60));
+        console.log("🎯 Clicked Element:", identifier);
+        console.log("🔍 Used Strategy:", findResult.strategy);
+        console.log("🏗️ Final Selector:", findResult.selector);
+        console.log("📊 Confidence:", findResult.confidence + "%");
+        console.log("🔢 Attempt:", attempt + "/" + retryCount);
+        console.log("▪".repeat(60));
+
         return;
       } catch (error) {
         this.logger.warn(`Click attempt ${attempt} failed`, {
@@ -379,6 +403,19 @@ export class BrowserAutomation {
       clear,
     });
 
+    console.log("\n⌨️ [BrowserAutomation] TYPE ACTION:");
+    console.log("▪".repeat(60));
+    console.log("🎯 Target Element:", identifier);
+    console.log("📝 Text to Type:", `"${text}"`);
+    console.log("📏 Text Length:", text.length, "characters");
+    console.log("🧹 Clear First:", clear);
+    console.log("⏱️ Typing Delay:", delay + "ms per char");
+    console.log(
+      "🏗️ Structured Selector:",
+      JSON.stringify(structuredSelector, null, 2)
+    );
+    console.log("▪".repeat(60));
+
     try {
       const findResult = await elementFinder.findElement(
         page,
@@ -409,6 +446,15 @@ export class BrowserAutomation {
         selector: findResult.selector,
         textLength: text.length,
       });
+
+      console.log("\n✅ [BrowserAutomation] TYPE SUCCESS:");
+      console.log("▪".repeat(60));
+      console.log("🎯 Typed Into Element:", identifier);
+      console.log("📝 Text Entered:", `"${text}"`);
+      console.log("🔍 Used Strategy:", findResult.strategy);
+      console.log("🏗️ Final Selector:", findResult.selector);
+      console.log("📊 Confidence:", findResult.confidence + "%");
+      console.log("▪".repeat(60));
     } catch (error) {
       this.logger.error(`Failed to type into element "${identifier}"`, {
         error: error instanceof Error ? error.message : String(error),

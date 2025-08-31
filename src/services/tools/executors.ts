@@ -121,9 +121,16 @@ export const executeWebAutomation = async (
     };
 
     const responseString = JSON.stringify(responseData);
-    console.log(
-      `📋 [WebAutomation] Returning ${responseString.length} chars to LLM`
-    );
+
+    console.log("\n� [WebAutomation] COMPLETE LLM RESPONSE:");
+    console.log("◆".repeat(80));
+    console.log("📊 Response Size:", responseString.length, "characters");
+    console.log("🌐 Final URL:", result.url);
+    console.log("◆".repeat(80));
+    console.log("🎯 FULL JSON RESPONSE TO LLM:");
+    console.log(responseString);
+    console.log("◆".repeat(80));
+    console.log("🚀 This COMPLETE response is being sent to LLM\n");
 
     return responseString;
   } catch (error: any) {
@@ -181,38 +188,84 @@ export const executeToolCall = async (
   }
 
   const { name, arguments: rawArgs } = toolCall.function;
+
+  console.log("\n🛠️ [ToolCall] RECEIVED FROM LLM:");
+  console.log("◇".repeat(80));
+  console.log("🔧 Tool Name:", name);
+  console.log("🔧 Tool Call ID:", toolCall.id);
+  console.log("📝 Raw Arguments String:", rawArgs);
+  console.log("◇".repeat(80));
+
   try {
     const args = rawArgs ? JSON.parse(rawArgs) : {};
+
+    console.log("✅ [ToolCall] PARSED ARGUMENTS:");
+    console.log("◇".repeat(80));
+    console.log(JSON.stringify(args, null, 2));
+    console.log("◇".repeat(80));
+    console.log("🚀 Executing tool with above arguments...\n");
+
     console.log(`🛠️ [ToolCall:start] name=${name} args=${previewString(args)}`);
 
+    let result: string;
     switch (name) {
       case "http_get_json_batch":
-        return await executeHttpGetBatch(args as HttpGetBatchArgs);
+        result = await executeHttpGetBatch(args as HttpGetBatchArgs);
+        break;
 
       case "web_automation":
-        return await executeWebAutomation(args as WebAutomationArgs);
+        result = await executeWebAutomation(args as WebAutomationArgs);
+        break;
 
       case "execute_terminal_command":
-        return await executeTerminalCommand(args as TerminalCommandArgs);
+        result = await executeTerminalCommand(args as TerminalCommandArgs);
+        break;
 
       default:
         console.warn(
           `⚠️ [ToolCall:unknown] name=${name} args=${previewString(rawArgs)}`
         );
-        return JSON.stringify({
+        result = JSON.stringify({
           ok: false,
           error: `Unknown tool: ${name}`,
         });
     }
+
+    console.log("\n🎯 [ToolCall] FINAL RESULT BEING RETURNED TO LLM:");
+    console.log("◆".repeat(80));
+    console.log("🔧 Tool:", name);
+    console.log("📊 Result Size:", result.length, "characters");
+    console.log("◆".repeat(80));
+    console.log("📋 COMPLETE RESULT:");
+    console.log(result);
+    console.log("◆".repeat(80));
+    console.log("✅ Tool execution completed\n");
+
+    return result;
   } catch (e) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error("\n❌ [ToolCall] ERROR:");
+    console.error("◇".repeat(80));
+    console.error("🔧 Tool:", name);
+    console.error("📝 Raw Args:", rawArgs);
+    console.error("💥 Error:", errorMsg);
+    console.error("◇".repeat(80));
+
     console.error(
-      `❌ [ToolCall:error] name=${name} args=${previewString(rawArgs)} error=${
-        e instanceof Error ? e.message : String(e)
-      }`
+      `❌ [ToolCall:error] name=${name} args=${previewString(
+        rawArgs
+      )} error=${errorMsg}`
     );
-    return JSON.stringify({
+    const errorResult = JSON.stringify({
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorMsg,
     });
+
+    console.log("\n🎯 [ToolCall] ERROR RESULT BEING RETURNED TO LLM:");
+    console.log("◆".repeat(80));
+    console.log(errorResult);
+    console.log("◆".repeat(80));
+
+    return errorResult;
   }
 };

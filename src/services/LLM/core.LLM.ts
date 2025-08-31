@@ -215,6 +215,18 @@ export class LLMService implements LLMProvider {
 
           console.log(`🤖 Generating response with primary LLM...`);
 
+          console.log("\n🧠 [LLMService] SYSTEM PROMPT BEING SENT TO LLM:");
+          console.log("◈".repeat(80));
+          console.log("📏 System Prompt Length:", systemPrompt.length);
+          console.log("🤖 Model:", this.primaryConfig.model);
+          console.log("🔧 Service:", this.primaryConfig.service);
+          console.log("◈".repeat(80));
+          console.log("📋 FULL SYSTEM PROMPT:");
+          console.log("─".repeat(60));
+          console.log(systemPrompt);
+          console.log("─".repeat(60));
+          console.log("🎯 This is the EXACT system prompt sent to LLM\n");
+
           // Clean prompts for security before sending to LLM
           const cleanedSystemPrompt =
             PromptInjectionProtectionService.sanitizeText(systemPrompt, {
@@ -236,6 +248,19 @@ export class LLMService implements LLMProvider {
             originalUserLength: userMessage.length,
             cleanedUserLength: cleanedUserMessage.length,
           });
+
+          console.log("\n🛡️ [LLMService] SECURITY CLEANING RESULTS:");
+          console.log("◈".repeat(80));
+          console.log("📏 Original System Length:", systemPrompt.length);
+          console.log("📏 Cleaned System Length:", cleanedSystemPrompt.length);
+          console.log("📏 Original User Length:", userMessage.length);
+          console.log("📏 Cleaned User Length:", cleanedUserMessage.length);
+          console.log(
+            "🔄 System Changed:",
+            systemPrompt !== cleanedSystemPrompt
+          );
+          console.log("🔄 User Changed:", userMessage !== cleanedUserMessage);
+          console.log("◈".repeat(80));
 
           const textOutput = await runWithToolsIfRequested(
             this.primaryClient,

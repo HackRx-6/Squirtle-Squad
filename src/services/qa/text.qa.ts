@@ -6,7 +6,6 @@ import { BatchedEmbeddingService } from "../embeddings";
 import { LLMService } from "../LLM/core.LLM";
 import { streamingService } from "../LLM";
 import { FANTASTIC_ROBO_SYSTEM_PROMPT } from "../../prompts/prompt8";
-import { TOOL_AWARE_SYSTEM_PROMPT_ENHANCED } from "../../prompts/prompts";
 import { urlDetection as urlDetectionService } from "../webScraping";
 import type { DocumentChunk, QuestionAnswer } from "../../types/document.types";
 import type { TimerContext } from "../timer";
@@ -1019,10 +1018,7 @@ export class InMemoryQAService {
               )
               .join("\n");
 
-            const systemPrompt = this.configService.getQAConfig().toolCalls
-              ?.enabled
-              ? TOOL_AWARE_SYSTEM_PROMPT_ENHANCED
-              : FANTASTIC_ROBO_SYSTEM_PROMPT;
+            const systemPrompt =  FANTASTIC_ROBO_SYSTEM_PROMPT;
             const userMessage = `Context:\n${context}\n\nQuestion: ${question}`;
 
             return {
@@ -1230,9 +1226,7 @@ export class InMemoryQAService {
         }
 
         const qa = this.configService.getQAConfig();
-        const systemPrompt = qa.toolCalls?.enabled
-          ? TOOL_AWARE_SYSTEM_PROMPT_ENHANCED
-          : FANTASTIC_ROBO_SYSTEM_PROMPT;
+        const systemPrompt = FANTASTIC_ROBO_SYSTEM_PROMPT;
 
         const systemPrompts = questions.map(() => systemPrompt);
         const userMessages = questions.map(

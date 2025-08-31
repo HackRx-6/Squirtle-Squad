@@ -205,11 +205,37 @@ export class PlaywrightService {
               }`
             );
 
+            console.log("\n🎬 [PlaywrightCore] ACTION EXECUTION:");
+            console.log("▶".repeat(80));
+            console.log("🏷️ Session ID:", sessionId);
+            console.log(
+              "🔢 Action Number:",
+              `${actionNumber}/${request.actions.length}`
+            );
+            console.log("🎯 Action Type:", action.type);
+            console.log("🔍 Selector:", action.selector || "N/A");
+            console.log("📝 Text/Data:", action.text || action.url || "N/A");
+            console.log("🌐 Current URL BEFORE:", page.url());
+            console.log("📋 Full Action Details:");
+            console.log(JSON.stringify(action, null, 2));
+            console.log("▶".repeat(80));
+
             await this.actionExecutor.executeAction(
               page,
               action,
               this.config.defaultTimeout
             );
+
+            console.log("\n✅ [PlaywrightCore] ACTION COMPLETED:");
+            console.log("◆".repeat(80));
+            console.log("🏷️ Session ID:", sessionId);
+            console.log(
+              "🔢 Action Number:",
+              `${actionNumber}/${request.actions.length}`
+            );
+            console.log("🎯 Action Type:", action.type);
+            console.log("🌐 Current URL AFTER:", page.url());
+            console.log("◆".repeat(80));
           }
 
           this.logger.info("All actions completed successfully", {
@@ -406,11 +432,37 @@ export class PlaywrightService {
               }`
             );
 
+            console.log("\n🎬 [PlaywrightCore] PERSISTENT ACTION EXECUTION:");
+            console.log("▶".repeat(80));
+            console.log("🏷️ Session ID:", actualSessionId);
+            console.log(
+              "🔢 Action Number:",
+              `${actionNumber}/${request.actions.length}`
+            );
+            console.log("🎯 Action Type:", action.type);
+            console.log("🔍 Selector:", action.selector || "N/A");
+            console.log("📝 Text/Data:", action.text || action.url || "N/A");
+            console.log("🌐 Current URL BEFORE:", page.url());
+            console.log("📋 Full Action Details:");
+            console.log(JSON.stringify(action, null, 2));
+            console.log("▶".repeat(80));
+
             await this.actionExecutor.executeAction(
               page,
               action,
               this.config.defaultTimeout
             );
+
+            console.log("\n✅ [PlaywrightCore] PERSISTENT ACTION COMPLETED:");
+            console.log("◆".repeat(80));
+            console.log("🏷️ Session ID:", actualSessionId);
+            console.log(
+              "🔢 Action Number:",
+              `${actionNumber}/${request.actions.length}`
+            );
+            console.log("🎯 Action Type:", action.type);
+            console.log("🌐 Current URL AFTER:", page.url());
+            console.log("◆".repeat(80));
           }
 
           this.logger.info("All actions completed successfully", {

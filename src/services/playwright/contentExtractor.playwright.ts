@@ -68,6 +68,20 @@ export class ContentExtractor {
       maxContentSize,
     });
 
+    console.log(
+      "\n📋 [ContentExtractor] STARTING ENHANCED CONTENT EXTRACTION:"
+    );
+    console.log("=".repeat(70));
+    console.log("🌐 Page URL:", page.url());
+    console.log("🔧 Include HTML:", includeHTML);
+    console.log("🎯 Include Interactive Elements:", includeInteractiveElements);
+    console.log("📏 Max Content Size:", maxContentSize);
+    console.log(
+      "⚙️ HTML Cleaning Options:",
+      JSON.stringify(htmlCleaningOptions, null, 2)
+    );
+    console.log("=".repeat(70));
+
     const startTime = Date.now();
 
     // Get basic page info
@@ -205,6 +219,28 @@ export class ContentExtractor {
       htmlIncluded: !!result.html,
       htmlSize: result.html?.length || 0,
     });
+
+    console.log("\n📋 [ContentExtractor] EXTRACTION COMPLETED:");
+    console.log("=".repeat(70));
+    console.log("⏱️ Extraction Time:", extractionTime + "ms");
+    console.log("📰 Page Title:", title);
+    console.log("📏 Text Content Length:", cleanText.length);
+    console.log("🔗 HTML Included:", !!result.html);
+    console.log("📏 HTML Size:", result.html?.length || 0);
+    console.log("=".repeat(70));
+
+    // Log the COMPLETE result that will be sent to LLM
+    console.log("\n📋 [ContentExtractor] COMPLETE RESULT FOR LLM:");
+    console.log("░".repeat(80));
+    console.log("🎯 FINAL JSON STRUCTURE SENT TO LLM:");
+    console.log(JSON.stringify(result, null, 2));
+    console.log("░".repeat(80));
+    console.log(
+      "📏 Total JSON size:",
+      JSON.stringify(result).length,
+      "characters"
+    );
+    console.log("🚀 This COMPLETE JSON will be sent to the LLM\n");
 
     return result;
   }

@@ -1,5 +1,3 @@
-import { TextCleaningService } from "./text.cleaning";
-
 export class SimpleHTMLCleaningService {
   /**
    * Simple and effective HTML to text conversion that preserves content

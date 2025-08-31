@@ -159,7 +159,25 @@ export class ElementFinder {
       context: selectorConfig.context,
     });
 
+    console.log("\n🔍 [ElementFinder] FINDING ELEMENT:");
+    console.log("▼".repeat(60));
+    console.log("🎯 Element Type:", selectorConfig.type);
+    console.log(
+      "🏷️ Primary Identifier:",
+      JSON.stringify(selectorConfig.identifier, null, 2)
+    );
+    console.log(
+      "🔄 Fallback Strategies:",
+      selectorConfig.fallbacks?.length || 0
+    );
+    console.log("🌐 Context:", JSON.stringify(selectorConfig.context, null, 2));
+    console.log("⏱️ Timeout:", timeout + "ms");
+    console.log("📋 Full Selector Config:");
+    console.log(JSON.stringify(selectorConfig, null, 2));
+    console.log("▼".repeat(60));
+
     // Try primary identifier first
+    console.log("\n🔍 [ElementFinder] TRYING PRIMARY IDENTIFIER:");
     const primaryResult = await this.trySelector(
       page,
       selectorConfig,
@@ -167,13 +185,27 @@ export class ElementFinder {
       "primary"
     );
     if (primaryResult.found) {
+      console.log("✅ [ElementFinder] PRIMARY IDENTIFIER SUCCESS!");
+      console.log("📊 Confidence: 95%");
+      console.log("🔍 Strategy:", primaryResult.strategy);
+      console.log("🏗️ Final Selector:", primaryResult.selector);
       return { ...primaryResult, confidence: 95 };
     }
+    console.log(
+      "❌ [ElementFinder] Primary identifier failed, trying fallbacks..."
+    );
 
     // Try fallback strategies
     if (selectorConfig.fallbacks) {
       for (let i = 0; i < selectorConfig.fallbacks.length; i++) {
         const fallback = selectorConfig.fallbacks[i];
+        console.log(
+          `\n🔍 [ElementFinder] TRYING FALLBACK ${i + 1}/${
+            selectorConfig.fallbacks.length
+          }:`
+        );
+        console.log("🔄 Fallback Config:", JSON.stringify(fallback, null, 2));
+
         const fallbackResult = await this.trySelector(
           page,
           selectorConfig,
@@ -181,16 +213,39 @@ export class ElementFinder {
           `fallback-${i + 1}`
         );
         if (fallbackResult.found) {
-          return { ...fallbackResult, confidence: Math.max(85 - i * 10, 50) };
+          const confidence = Math.max(85 - i * 10, 50);
+          console.log(`✅ [ElementFinder] FALLBACK ${i + 1} SUCCESS!`);
+          console.log("📊 Confidence:", confidence + "%");
+          console.log("🔍 Strategy:", fallbackResult.strategy);
+          console.log("🏗️ Final Selector:", fallbackResult.selector);
+          return { ...fallbackResult, confidence };
         }
+        console.log(`❌ [ElementFinder] Fallback ${i + 1} failed`);
       }
     }
 
     // Final attempt with relaxed matching
+    console.log("\n🔍 [ElementFinder] TRYING RELAXED MATCHING (last resort):");
     const relaxedResult = await this.tryRelaxedMatching(page, selectorConfig);
     if (relaxedResult.found) {
+      console.log("✅ [ElementFinder] RELAXED MATCHING SUCCESS!");
+      console.log("📊 Confidence: 30%");
+      console.log("🔍 Strategy:", relaxedResult.strategy);
+      console.log("🏗️ Final Selector:", relaxedResult.selector);
       return { ...relaxedResult, confidence: 30 };
     }
+
+    console.log("\n❌ [ElementFinder] COMPLETE FAILURE:");
+    console.log("▼".repeat(60));
+    console.log("💀 NO ELEMENT FOUND with any strategy");
+    console.log("🎯 Searched for:", selectorConfig.type);
+    console.log(
+      "🏷️ Primary ID:",
+      JSON.stringify(selectorConfig.identifier, null, 2)
+    );
+    console.log("🔄 Tried Fallbacks:", selectorConfig.fallbacks?.length || 0);
+    console.log("📊 Final Confidence: 0%");
+    console.log("▼".repeat(60));
 
     this.logger.warn("No element found with structured selector", {
       selectorConfig,

@@ -81,9 +81,37 @@ export const runWithToolsIfRequested = async (
   const toolChoice = options?.toolChoice || "auto";
   const maxLoops = options?.maxToolLoops ?? 6; // Increased for better tool usage
 
+  console.log("\n🧰 [Orchestration] TOOL-CALLING SESSION STARTED:");
+  console.log("◈".repeat(80));
+  console.log("🤖 Model:", model);
+  console.log("🛠️ Tools Available:", tools.length);
+  console.log("🎯 Tool Choice Strategy:", JSON.stringify(toolChoice, null, 2));
+  console.log("🔄 Max Loops:", maxLoops);
+  console.log("🌍 Is Azure:", !!options?.isAzure);
+  console.log("💬 Initial User Message Length:", userMessage.length);
+  console.log("◈".repeat(80));
+  console.log("💬 INITIAL USER MESSAGE:");
+  console.log("─".repeat(60));
+  console.log(userMessage);
+  console.log("─".repeat(60));
+
   // Main conversation loop with tool support
   for (let iteration = 0; iteration < maxLoops; iteration++) {
     console.log(`🔁 Tool loop iteration ${iteration + 1}/${maxLoops}`);
+
+    console.log("\n🔄 [Orchestration] MAKING LLM REQUEST:");
+    console.log("◈".repeat(80));
+    console.log("🔢 Iteration:", `${iteration + 1}/${maxLoops}`);
+    console.log("🤖 Model:", model);
+    console.log("💬 Message Count:", messages.length);
+    console.log(
+      "🛠️ Tools:",
+      tools
+        .map((t) => (t.type === "function" ? t.function?.name : t.type))
+        .join(", ")
+    );
+    console.log("🎯 Tool Choice:", JSON.stringify(toolChoice, null, 2));
+    console.log("◈".repeat(80));
 
     // Create request options - exclude reasoning_effort for Azure
     const requestOptions: any = {
@@ -106,11 +134,48 @@ export const runWithToolsIfRequested = async (
     const assistantMessage = choice?.message;
     const toolCalls = assistantMessage?.tool_calls || [];
 
+    console.log("\n🧠 [Orchestration] LLM RESPONSE RECEIVED:");
+    console.log("◈".repeat(80));
+    console.log("🔢 Iteration:", `${iteration + 1}/${maxLoops}`);
+    console.log("📝 Content Length:", assistantMessage?.content?.length || 0);
+    console.log("🛠️ Tool Calls Requested:", toolCalls.length);
+    console.log("◈".repeat(80));
+
+    if (assistantMessage?.content) {
+      console.log("💬 LLM RESPONSE CONTENT:");
+      console.log("─".repeat(60));
+      console.log(assistantMessage.content);
+      console.log("─".repeat(60));
+    }
+
+    if (toolCalls.length > 0) {
+      console.log("🛠️ TOOL CALLS REQUESTED BY LLM:");
+      console.log("─".repeat(60));
+      toolCalls.forEach((call, idx) => {
+        console.log(`🔧 Tool Call ${idx + 1}:`);
+        console.log("  ID:", call.id);
+        console.log("  Type:", call.type);
+        console.log("  Function:", call.function?.name);
+        console.log("  Arguments:", call.function?.arguments);
+      });
+      console.log("─".repeat(60));
+    }
+
     // If no tool calls, the assistant has provided a final answer
     if (!toolCalls.length) {
       console.log(`🧠 Assistant provided final response without tool calls.`);
       const content = assistantMessage?.content?.trim();
-      if (content) return content;
+      if (content) {
+        console.log("\n✅ [Orchestration] FINAL RESPONSE:");
+        console.log("◈".repeat(80));
+        console.log("📝 Response Length:", content.length);
+        console.log("💬 FINAL CONTENT:");
+        console.log("─".repeat(60));
+        console.log(content);
+        console.log("─".repeat(60));
+        console.log("◈".repeat(80));
+        return content;
+      }
 
       // Edge case: empty response without tool calls
       console.warn(
@@ -154,6 +219,11 @@ export const runWithToolsIfRequested = async (
       tool_calls: toolCalls,
     });
 
+    console.log("\n🛠️ [Orchestration] EXECUTING TOOL CALLS:");
+    console.log("◈".repeat(80));
+    console.log("🔢 Tool Calls Count:", toolCalls.length);
+    console.log("◈".repeat(80));
+
     // Execute tool calls - OpenAI supports parallel execution
     const toolResults = await Promise.allSettled(
       toolCalls.map(async (toolCall) => {
@@ -187,6 +257,18 @@ export const runWithToolsIfRequested = async (
           const result = await executeToolCall(toolCall, {
             abortSignal: options?.abortSignal,
           });
+
+          console.log("\n✅ [Orchestration] TOOL EXECUTION SUCCESS:");
+          console.log("◈".repeat(80));
+          console.log("🔧 Tool:", toolName);
+          console.log("🆔 Call ID:", toolCall.id);
+          console.log("📊 Result Length:", result.length);
+          console.log("◈".repeat(80));
+          console.log("📋 TOOL RESULT:");
+          console.log("─".repeat(60));
+          console.log(result);
+          console.log("─".repeat(60));
+
           console.log(
             `📥 Tool '${toolName}' completed: ${previewString(result)}`
           );
@@ -198,6 +280,14 @@ export const runWithToolsIfRequested = async (
         } catch (error) {
           const errorMsg =
             error instanceof Error ? error.message : String(error);
+
+          console.log("\n❌ [Orchestration] TOOL EXECUTION FAILED:");
+          console.log("◈".repeat(80));
+          console.log("🔧 Tool:", toolName);
+          console.log("🆔 Call ID:", toolCall.id);
+          console.log("💥 Error:", errorMsg);
+          console.log("◈".repeat(80));
+
           console.error(`❌ Tool '${toolName}' failed:`, errorMsg);
           return {
             toolCallId: toolCall.id,
@@ -209,8 +299,20 @@ export const runWithToolsIfRequested = async (
     );
 
     // Add tool results to the conversation
+    console.log("\n📝 [Orchestration] ADDING TOOL RESULTS TO CONVERSATION:");
+    console.log("◈".repeat(80));
+
     toolResults.forEach((result, index) => {
       if (result.status === "fulfilled") {
+        console.log(
+          `✅ Tool ${index + 1} (${
+            result.value.toolCallId
+          }): Adding result to conversation`
+        );
+        console.log(
+          `   Content Length: ${result.value.content.length} characters`
+        );
+
         messages.push({
           role: "tool",
           tool_call_id: result.value.toolCallId,
@@ -219,6 +321,11 @@ export const runWithToolsIfRequested = async (
       } else {
         // Handle Promise rejection
         const toolCall = toolCalls[index];
+        console.log(
+          `❌ Tool ${index + 1} (${toolCall?.id}): Adding error to conversation`
+        );
+        console.log(`   Error: ${result.reason}`);
+
         if (toolCall) {
           messages.push({
             role: "tool",
@@ -228,6 +335,10 @@ export const runWithToolsIfRequested = async (
         }
       }
     });
+
+    console.log("◈".repeat(80));
+    console.log(`📝 Total messages in conversation: ${messages.length}`);
+    console.log("◈".repeat(80));
 
     // After first iteration, let the model decide whether to use more tools
     // This prevents infinite tool calling loops
@@ -243,6 +354,13 @@ export const runWithToolsIfRequested = async (
   console.log(
     `⏰ Tool loop limit reached. Making final call without tool requirements.`
   );
+
+  console.log("\n🔚 [Orchestration] MAKING FINAL CALL:");
+  console.log("◈".repeat(80));
+  console.log("🔢 Total Iterations:", maxLoops);
+  console.log("💬 Final Message Count:", messages.length);
+  console.log("🛠️ Tool Choice: none (final call)");
+  console.log("◈".repeat(80));
 
   // Create final request options - exclude reasoning_effort for Azure
   const finalRequestOptions: any = {
@@ -264,6 +382,20 @@ export const runWithToolsIfRequested = async (
   );
 
   const finalContent = finalResponse.choices[0]?.message?.content?.trim();
+
+  console.log("\n🏁 [Orchestration] FINAL RESPONSE RECEIVED:");
+  console.log("◈".repeat(80));
+  console.log("📝 Response Length:", finalContent?.length || 0);
+  console.log("◈".repeat(80));
+
+  if (finalContent) {
+    console.log("💬 FINAL RESPONSE CONTENT:");
+    console.log("─".repeat(60));
+    console.log(finalContent);
+    console.log("─".repeat(60));
+  }
+  console.log("◈".repeat(80));
+
   return (
     finalContent ||
     "Unable to generate a complete response within the tool execution limit."

@@ -27,6 +27,24 @@ export class ActionExecutor {
       url: page.url(),
     });
 
+    console.log("\n🎬 [ActionExecutor] EXECUTING ACTION:");
+    console.log("▶".repeat(70));
+    console.log("🏷️ Action ID:", actionId);
+    console.log("🎯 Action Type:", action.type);
+    console.log("🔍 Selector:", action.selector || "N/A");
+    console.log(
+      "📝 Text/Data:",
+      action.text ||
+        (action as any).optionValue ||
+        (action as any).formData ||
+        "N/A"
+    );
+    console.log("⏱️ Timeout:", timeout + "ms");
+    console.log("🌐 Current URL:", page.url());
+    console.log("📋 Full Action Details:");
+    console.log(JSON.stringify(action, null, 2));
+    console.log("▶".repeat(70));
+
     const startTime = Date.now();
 
     try {
@@ -110,6 +128,15 @@ export class ActionExecutor {
         executionTimeMs: executionTime,
         finalUrl: page.url(),
       });
+
+      console.log("\n✅ [ActionExecutor] ACTION COMPLETED:");
+      console.log("◆".repeat(70));
+      console.log("🏷️ Action ID:", actionId);
+      console.log("🎯 Action Type:", action.type);
+      console.log("⏱️ Execution Time:", executionTime + "ms");
+      console.log("🌐 Final URL:", page.url());
+      console.log("✅ Status: SUCCESS");
+      console.log("◆".repeat(70));
     } catch (error: any) {
       const executionTime = Date.now() - startTime;
       this.logger.error(`Action failed: ${action.type}`, {
@@ -120,6 +147,19 @@ export class ActionExecutor {
         executionTimeMs: executionTime,
         currentUrl: page.url(),
       });
+
+      console.log("\n❌ [ActionExecutor] ACTION FAILED:");
+      console.log("◆".repeat(70));
+      console.log("🏷️ Action ID:", actionId);
+      console.log("🎯 Action Type:", action.type);
+      console.log("🔍 Selector:", action.selector || "N/A");
+      console.log("⏱️ Execution Time:", executionTime + "ms");
+      console.log("🌐 Current URL:", page.url());
+      console.log("💥 Error:", error.message);
+      console.log("📋 Full Error:", error);
+      console.log("❌ Status: FAILED");
+      console.log("◆".repeat(70));
+
       throw error;
     }
   }
@@ -139,10 +179,25 @@ export class ActionExecutor {
       targetUrl: action.url,
     });
 
+    console.log("\n🧭 [ActionExecutor] NAVIGATION:");
+    console.log("▪".repeat(60));
+    console.log("🏷️ Action ID:", actionId);
+    console.log("🌐 Target URL:", action.url);
+    console.log("🌐 Current URL:", page.url());
+    console.log("⏱️ Timeout:", timeout + "ms");
+    console.log("▪".repeat(60));
+
     await page.goto(action.url, {
       waitUntil: "domcontentloaded",
       timeout,
     });
+
+    console.log("\n✅ [ActionExecutor] NAVIGATION COMPLETED:");
+    console.log("▪".repeat(60));
+    console.log("🏷️ Action ID:", actionId);
+    console.log("🌐 Final URL:", page.url());
+    console.log("📰 Page Title:", await page.title());
+    console.log("▪".repeat(60));
 
     this.logger.info(`Navigation completed to: ${page.url()}`, {
       actionId,
@@ -165,6 +220,14 @@ export class ActionExecutor {
       selector: action.selector,
     });
 
+    console.log("\n🖱️ [ActionExecutor] CLICK:");
+    console.log("▪".repeat(60));
+    console.log("🏷️ Action ID:", actionId);
+    console.log("🎯 Selector:", action.selector);
+    console.log("🌐 Current URL:", page.url());
+    console.log("⏱️ Timeout:", timeout + "ms");
+    console.log("▪".repeat(60));
+
     try {
       await browserAutomation.click(page, action.selector, {
         timeout,
@@ -177,11 +240,29 @@ export class ActionExecutor {
         },
       });
 
+      console.log("\n✅ [ActionExecutor] CLICK COMPLETED:");
+      console.log("▪".repeat(60));
+      console.log("🏷️ Action ID:", actionId);
+      console.log("🎯 Clicked:", action.selector);
+      console.log("🌐 Current URL:", page.url());
+      console.log("▪".repeat(60));
+
       this.logger.info(`Click completed successfully`, {
         actionId,
         selector: action.selector,
       });
     } catch (error) {
+      console.log("\n❌ [ActionExecutor] CLICK FAILED:");
+      console.log("▪".repeat(60));
+      console.log("🏷️ Action ID:", actionId);
+      console.log("🎯 Selector:", action.selector);
+      console.log(
+        "💥 Error:",
+        error instanceof Error ? error.message : String(error)
+      );
+      console.log("🌐 Current URL:", page.url());
+      console.log("▪".repeat(60));
+
       this.logger.error(`Click failed`, {
         actionId,
         selector: action.selector,

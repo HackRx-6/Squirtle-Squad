@@ -1,4 +1,3 @@
-
 import { loggingService } from "../logging";
 
 export interface HTMLCleaningOptions {
@@ -240,6 +239,15 @@ export class HTMLCleaningService {
     console.log("⚙️ Options:", JSON.stringify(options, null, 2));
     console.log("=".repeat(60));
 
+    // Log full original HTML content (without truncation)
+    console.log("\n🧹 [HTMLCleaning] FULL ORIGINAL HTML CONTENT:");
+    console.log("█".repeat(80));
+    console.log(htmlContent);
+    console.log("█".repeat(80));
+    console.log(
+      "📏 Full Original HTML logged above ^^ (" + originalSize + " chars)\n"
+    );
+
     let cleanedHTML = htmlContent;
 
     // Extract and analyze scripts
@@ -328,6 +336,18 @@ export class HTMLCleaningService {
     console.log("🗑️ Scripts Filtered Out:", scriptAnalysis.filtered.length);
     console.log("💾 Size Reduction:", originalSize - cleanedSize, "characters");
     console.log("=".repeat(60));
+
+    // Log full cleaned HTML content (without truncation)
+    console.log(
+      "\n🧹 [HTMLCleaning] FULL CLEANED HTML CONTENT TO BE SENT TO LLM:"
+    );
+    console.log("▓".repeat(80));
+    console.log(cleanedHTML);
+    console.log("▓".repeat(80));
+    console.log(
+      "📏 Full Cleaned HTML logged above ^^ (" + cleanedSize + " chars)"
+    );
+    console.log("🚀 This is EXACTLY what will be sent to the LLM\n");
 
     return result;
   }

@@ -4,6 +4,12 @@ import type { TimerContext } from "../timer";
 import { playwrightService } from "../playwright";
 import { PromptInjectionProtectionService } from "../cleaning/promptInjection.protection";
 import { AppConfigService } from "../../config/app.config";
+import {
+  GENERIC_MULTI_TOOL_PROMPT,
+  INTELLIGENT_TOOL_PROMPT,
+  AUTONOMOUS_CODING_PROMPT,
+  AUTONOMOUS_WEB_AGENT_PROMPT,
+} from "../../prompts/prompts";
 import type {
   ToolCallingRequest,
   ToolCallingResponse,
@@ -119,89 +125,206 @@ export class ToolCallingService {
     return { isValid: true };
   }
 
-  private createSystemPrompt(): string {
-    return `You are an autonomous AI assistant with powerful tools. Execute tasks completely and handle errors proactively.
+  private determinePromptType(
+    questions: string[]
+  ): "generic" | "intelligent" | "autonomous" | "web" {
+    console.log(
+      "\n🤔 [ToolCallingService] ANALYZING QUESTIONS TO DETERMINE PROMPT TYPE:"
+    );
+    console.log("◈".repeat(80));
 
-## AVAILABLE TOOLS:
-- **web_automation**: Website interactions, scraping, forms
-- **execute_terminal_command**: System commands, code execution, file operations, Git operations  
-- **http_get_json_batch**: API calls and data fetching
+    const allQuestionsText = questions.join(" ").toLowerCase();
 
-## EXECUTION PRINCIPLES:
-1. **COMPLETE ALL STEPS**: Don't stop at generating code - execute it, test it, commit, push, and deliver results
-2. **HANDLE ERRORS**: If code fails, debug it, fix it, and try again
-3. **FOLLOW THROUGH**: Complete entire workflows (code → test → commit → push → respond)
-4. **BE AUTONOMOUS**: Don't ask for permission - just do the tasks
-5. **VERIFY RESULTS**: Test your code with provided examples before finalizing
-6. **MANDATORY GIT**: Always complete Git operations when requested - it's not optional
+    // Check for autonomous coding indicators
+    const codingKeywords = [
+      "code",
+      "algorithm",
+      "function",
+      "solve",
+      "program",
+      "implement",
+      "git",
+      "commit",
+      "push",
+      "repository",
+      "hackathon",
+      "challenge",
+      "python",
+      "javascript",
+      "java",
+      "c++",
+      "coding",
+      "programming",
+      "debug",
+      "test",
+      "execute",
+      "run code",
+      "compile",
+    ];
 
-## CODING WORKFLOW:
-When asked to solve coding problems:
-1. Write the code using execute_terminal_command to create files
-2. Test the code with provided examples immediately
-3. If errors occur, debug and fix them
-4. Once working, ALWAYS commit and push to Git (mandatory step)
-5. Only after Git push is complete, provide the final answer based on actual execution results
+    const hasCodeKeywords = codingKeywords.some((keyword) =>
+      allQuestionsText.includes(keyword)
+    );
 
-## FILE WRITING WITH PROPER INDENTATION:
-CRITICAL: Use printf or echo -e to preserve indentation, NOT cat with heredoc
+    // Check for web automation indicators
+    const webKeywords = [
+      "website",
+      "browser",
+      "click",
+      "navigate",
+      "scrape",
+      "web",
+      "page",
+      "form",
+      "submit",
+      "button",
+      "link",
+      "scroll",
+      "element",
+      "automation",
+      "playwright",
+      "selenium",
+      "crawl",
+      "extract",
+      "download",
+      "upload",
+      "login",
+      "search",
+      "hover",
+      "select",
+      "input",
+      "checkbox",
+      "dropdown",
+    ];
 
-Method 1 (RECOMMENDED) - Use printf with \n for newlines:
-printf 'def example():\n    if condition:\n        return result\n' > folder_name/filename.py
+    const hasWebKeywords = webKeywords.some((keyword) =>
+      allQuestionsText.includes(keyword)
+    );
 
-Method 2 - Use echo -e with explicit spacing:
-echo -e 'def example():\n    if condition:\n        return result' > folder_name/filename.py
+    console.log("🔍 Analysis Results:");
+    console.log("📝 Questions Count:", questions.length);
+    console.log("🔧 Has Coding Keywords:", hasCodeKeywords);
+    console.log("🌐 Has Web Keywords:", hasWebKeywords);
+    console.log("📋 Sample Question:", questions[0]?.substring(0, 100) + "...");
 
-Method 3 - Write line by line:
-echo 'def example():' > folder_name/filename.py
-echo '    if condition:' >> folder_name/filename.py  
-echo '        return result' >> folder_name/filename.py
+    let promptType: "generic" | "intelligent" | "autonomous" | "web";
 
-CRITICAL: 
-- Each indentation level = 4 spaces (use literal spaces in commands)
-- Use \n for line breaks in printf/echo
-- NO tabs, only spaces
-- Test immediately after writing
+    if (hasWebKeywords) {
+      promptType = "web";
+      console.log("🎯 Selected: WEB (web automation/browser tasks detected)");
+    } else if (
+      hasCodeKeywords &&
+      (allQuestionsText.includes("git") || allQuestionsText.includes("commit"))
+    ) {
+      promptType = "autonomous";
+      console.log("🎯 Selected: AUTONOMOUS (coding + git operations detected)");
+    } else if (questions.length <= 2 && hasCodeKeywords) {
+      promptType = "intelligent";
+      console.log("🎯 Selected: INTELLIGENT (simple coding task)");
+    } else {
+      promptType = "generic";
+      console.log("🎯 Selected: GENERIC (multi-purpose or complex tasks)");
+    }
 
-## GIT OPERATIONS:
-For Git tasks, use simple operations only:
-- Add files: git add .
-- Commit: git commit -m "message"  
-- Push: git push (use current branch and remote)
-
-CRITICAL: 
-- DO NOT change remotes (no git remote add/set-url)
-- DO NOT change branches (no git branch -M or git checkout)
-- DO NOT initialize new repos (no git init unless in empty directory)
-- Use existing repository setup and current branch
-
-CRITICAL: When writing code, ensure proper indentation using spaces (4 spaces per level)
-
-MANDATORY SEQUENCE: Create → Test → Debug if needed → Add → Commit → Push → THEN respond with answers
-
-## RESPONSE FORMAT:
-- For multiple questions: "ANSWER 1: [actual result]", "ANSWER 2: [actual result]"
-- Provide ONLY the final computed results
-- Don't show code unless specifically asked
-- Don't explain the process - just deliver results
-
-CRITICAL: Execute every step completely. Test code immediately. Fix errors. Complete Git operations BEFORE responding. Git push is MANDATORY when requested. Provide actual results only after Git operations are complete.`;
+    console.log("◈".repeat(80));
+    return promptType;
   }
 
-  private createUserMessage(documents: string, questions: string[]): string {
+  private createSystemPrompt(
+    promptType: "generic" | "intelligent" | "autonomous" | "web" = "generic"
+  ): string {
+    console.log("\n🧠 [ToolCallingService] SELECTING SYSTEM PROMPT:");
+    console.log("◈".repeat(80));
+    console.log("🎯 Prompt Type:", promptType);
+    console.log("◈".repeat(80));
+
+    let selectedPrompt: string;
+
+    switch (promptType) {
+      case "web":
+        selectedPrompt = AUTONOMOUS_WEB_AGENT_PROMPT;
+        console.log("✅ Using AUTONOMOUS_WEB_AGENT_PROMPT from prompts.ts");
+        break;
+      case "intelligent":
+        selectedPrompt = INTELLIGENT_TOOL_PROMPT;
+        console.log("✅ Using INTELLIGENT_TOOL_PROMPT from prompts.ts");
+        break;
+      case "autonomous":
+        selectedPrompt = AUTONOMOUS_CODING_PROMPT;
+        console.log("✅ Using AUTONOMOUS_CODING_PROMPT from prompts.ts");
+        break;
+      case "generic":
+      default:
+        selectedPrompt = GENERIC_MULTI_TOOL_PROMPT;
+        console.log("✅ Using GENERIC_MULTI_TOOL_PROMPT from prompts.ts");
+        break;
+    }
+
+    console.log(
+      "📏 System Prompt Length:",
+      selectedPrompt.length,
+      "characters"
+    );
+    console.log("📋 System Prompt Preview (first 200 chars):");
+    console.log("─".repeat(60));
+    console.log(selectedPrompt.substring(0, 200) + "...");
+    console.log("─".repeat(60));
+    console.log("🎯 This prompt will be sent to LLM\n");
+
+    return selectedPrompt;
+  }
+
+  private createUserMessage(
+    documents: string,
+    questions: string[],
+    promptType: "generic" | "intelligent" | "autonomous" | "web" = "generic"
+  ): string {
     const questionsText = questions.map((q, i) => `${i + 1}. ${q}`).join("\n");
+
+    console.log("\n📝 [ToolCallingService] CREATING USER MESSAGE:");
+    console.log("◈".repeat(80));
+    console.log("🎯 Prompt Type for Instructions:", promptType);
+
+    let importantInstructions = "";
+
+    // Add specific instructions based on prompt type
+    if (promptType === "web") {
+      importantInstructions = `IMPORTANT: 
+1. Use the structured element selector JSON format when interacting with web elements
+2. Complete all web automation tasks thoroughly with proper error handling
+3. Extract all requested data and provide clear, structured results
+
+`;
+      console.log("✅ Using WEB-SPECIFIC instructions for browser automation");
+    } else if (promptType === "autonomous" || promptType === "intelligent") {
+      importantInstructions = `IMPORTANT: 
+1. Use printf with \n for writing code files to preserve indentation (NOT cat with heredoc)
+2. If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
+3. For Git: Only use simple operations - git add, git commit, git push. DO NOT change remotes, branches, or initialize repos.
+
+`;
+      console.log(
+        "✅ Using CODING-SPECIFIC instructions for development tasks"
+      );
+    } else {
+      importantInstructions = `IMPORTANT: 
+1. Use appropriate tools intelligently based on what each question requires
+2. Provide clear, accurate answers based on the context and tools available
+3. Follow proper formatting and structure in your responses
+
+`;
+      console.log("✅ Using GENERIC instructions for general tasks");
+    }
+
+    console.log("📋 Instructions Length:", importantInstructions.length);
+    console.log("◈".repeat(80));
 
     return `Documents/Context: ${documents}
 
 Questions/Tasks:
 ${questionsText}
 
-IMPORTANT: 
-1. Use printf with \n for writing code files to preserve indentation (NOT cat with heredoc)
-2. If the task involves pushing code to Git/GitHub, you MUST complete the Git operations (add, commit, push) BEFORE providing your final answer. This is mandatory, not optional.
-3. For Git: Only use simple operations - git add, git commit, git push. DO NOT change remotes, branches, or initialize repos.
-
-Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
+${importantInstructions}Please help me with these questions/tasks. Use the appropriate tools intelligently based on what each question requires.`;
   }
 
   private parseMultipleAnswers(
@@ -527,11 +650,23 @@ Please help me with these questions/tasks. Use the appropriate tools intelligent
 
       // Create prompts
       this.logger.debug("Creating prompts for LLM", { sessionId });
-      const rawSystemPrompt = this.createSystemPrompt();
+
+      // Determine the best prompt type based on questions
+      const promptType = this.determinePromptType(request.questions);
+      const rawSystemPrompt = this.createSystemPrompt(promptType);
+
       const rawUserMessage = this.createUserMessage(
         request.documents,
-        request.questions
+        request.questions,
+        promptType
       );
+
+      console.log("\n🧠 [ToolCallingService] FINAL PROMPTS SELECTED:");
+      console.log("◈".repeat(80));
+      console.log("🎯 System Prompt Type:", promptType);
+      console.log("📏 System Prompt Length:", rawSystemPrompt.length);
+      console.log("📏 User Message Length:", rawUserMessage.length);
+      console.log("◈".repeat(80));
 
       // Clean prompts using prompt injection protection
       this.logger.debug("Cleaning prompts for security", { sessionId });
