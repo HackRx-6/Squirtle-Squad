@@ -40,7 +40,7 @@ export class ContentExtractor {
         text: string;
         id?: string;
         type?: string;
-        formAction?: string;
+        // formAction removed to reduce token usage
       }>;
       links: Array<{
         text: string;
@@ -86,12 +86,10 @@ export class ContentExtractor {
 
     // Get basic page info
     const title = await page.title();
-    const textContent = await page.textContent("body");
-    const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
 
     const result: any = {
       title,
-      text: cleanText,
+      text: "", // Will be set after HTML cleaning to use cleaned content
       metadata: {},
     };
 
@@ -132,18 +130,31 @@ export class ContentExtractor {
             result.html = cleanedHTML;
           }
 
+          // Extract clean text from the cleaned HTML instead of raw page
+          const textContent = this.extractTextFromHTML(cleanedHTML);
+          result.text = textContent?.replace(/\s+/g, " ").trim() || "";
+
           this.logger.info("HTML content processed", {
             originalSize,
             cleanedSize,
             compressionRatio: result.metadata.compressionRatio,
             finalSize: result.html.length,
+            extractedTextLength: result.text.length,
           });
         }
       } catch (error) {
         this.logger.error("Error during HTML extraction/cleaning", { error });
-        // Fallback to basic text content
+        // Fallback to basic text content from page
+        const textContent = await page.textContent("body");
+        result.text = textContent?.replace(/\s+/g, " ").trim() || "";
         result.html = undefined;
       }
+    } else {
+      // If not including HTML, still extract text from page (but clean it)
+      const textContent = await page.textContent("body");
+      const rawText = textContent?.replace(/\s+/g, " ").trim() || "";
+      // Apply basic JavaScript pattern cleaning to the extracted text
+      result.text = this.cleanTextContent(rawText);
     }
 
     // Extract interactive elements if requested
@@ -169,7 +180,7 @@ export class ContentExtractor {
           }))
         );
 
-        // Extract buttons with more details
+        // Extract buttons with more details (excluding redundant URLs)
         const buttons = await page.$$eval(
           'button, input[type="button"], input[type="submit"]',
           (buttons) =>
@@ -177,7 +188,7 @@ export class ContentExtractor {
               text: btn.textContent?.trim() || btn.value || "",
               id: btn.id || undefined,
               type: btn.type || undefined,
-              formAction: btn.formAction || undefined,
+              // Removed formAction to reduce token usage - not needed for LLM interactions
             }))
         );
 
@@ -215,7 +226,7 @@ export class ContentExtractor {
     this.logger.info("Enhanced content extraction completed", {
       extractionTimeMs: extractionTime,
       titleLength: title.length,
-      textLength: cleanText.length,
+      textLength: result.text.length,
       htmlIncluded: !!result.html,
       htmlSize: result.html?.length || 0,
     });
@@ -224,7 +235,7 @@ export class ContentExtractor {
     console.log("=".repeat(70));
     console.log("⏱️ Extraction Time:", extractionTime + "ms");
     console.log("📰 Page Title:", title);
-    console.log("📏 Text Content Length:", cleanText.length);
+    console.log("📏 Text Content Length:", result.text.length);
     console.log("🔗 HTML Included:", !!result.html);
     console.log("📏 HTML Size:", result.html?.length || 0);
     console.log("=".repeat(70));
@@ -257,12 +268,15 @@ export class ContentExtractor {
 
     const title = await page.title();
     const textContent = await page.textContent("body");
-    const cleanText = textContent?.replace(/\s+/g, " ").trim() || "";
+    const rawText = textContent?.replace(/\s+/g, " ").trim() || "";
+    // Apply text cleaning to remove JavaScript patterns
+    const cleanText = this.cleanTextContent(rawText);
     const url = page.url();
 
     this.logger.debug("Basic content extraction completed", {
       titleLength: title.length,
-      textLength: cleanText.length,
+      rawTextLength: rawText.length,
+      cleanTextLength: cleanText.length,
       url,
     });
 
@@ -340,5 +354,51 @@ export class ContentExtractor {
       title,
       ...metadata,
     };
+  }
+
+  /**
+   * Extract clean text content from HTML string
+   */
+  private extractTextFromHTML(html: string): string {
+    // Simple HTML text extraction - remove all tags and get text content
+    return html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "") // Remove any remaining scripts
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "") // Remove styles
+      .replace(/<[^>]*>/g, "") // Remove all HTML tags
+      .replace(/&nbsp;/g, " ") // Replace HTML entities
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+  }
+
+  /**
+   * Clean text content by removing JavaScript patterns and minified code
+   */
+  private cleanTextContent(text: string): string {
+    // Patterns to identify and remove JavaScript code, minified content, and tokens
+    const jsPatterns = [
+      // Remove long base64/JWT-like tokens
+      /[a-zA-Z0-9+/]{100,}[=]{0,2}/g,
+      // Remove function patterns
+      /function\s*\([^)]*\)\s*\{[^}]*\}/g,
+      // Remove const/let/var declarations with complex values
+      /(?:const|let|var)\s+\w+\s*=\s*["`'][^"`']{50,}["`']/g,
+      // Remove minified JS patterns (multiple operations on single line)
+      /[a-zA-Z_$][a-zA-Z0-9_$]*\.[a-zA-Z_$][a-zA-Z0-9_$]*\([^)]*\)\.[a-zA-Z_$][a-zA-Z0-9_$]*\([^)]*\)/g,
+      // Remove object/array literals with complex content
+      /\{[^}]{100,}\}/g,
+      // Remove import/export statements
+      /(?:import|export)\s+[^;]+;/g,
+    ];
+
+    let cleanedText = text;
+    for (const pattern of jsPatterns) {
+      cleanedText = cleanedText.replace(pattern, " ");
+    }
+
+    // Clean up multiple spaces and return
+    return cleanedText.replace(/\s+/g, " ").trim();
   }
 }

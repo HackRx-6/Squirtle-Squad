@@ -39,7 +39,7 @@ export interface WebAutomationAction {
   // For retrieval actions
   attributeName?: string; // For get_attribute action
   // For wait actions
-  waitState?: 'attached' | 'detached' | 'visible' | 'hidden'; // For wait_for_element action
+  waitState?: "attached" | "detached" | "visible" | "hidden"; // For wait_for_element action
 }
 
 export interface WebAutomationOptions {
@@ -79,7 +79,7 @@ export interface HttpGetBatchArgs {
 }
 
 export interface WebAutomationArgs {
-  url: string;
+  url?: string; // Optional for persistent sessions
   actions: WebAutomationAction[];
   options?: WebAutomationOptions;
 }

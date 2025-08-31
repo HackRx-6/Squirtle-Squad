@@ -10,6 +10,99 @@ import {
   type FormFillData,
 } from "./inputFiller.playwright";
 
+// Helper functions for JSON selector parsing and normalization
+function fixCommonJsonIssues(jsonString: string): string {
+  let fixed = jsonString;
+
+  // Fix common issues with escaped quotes
+  fixed = fixed.replace(/\\"/g, '"');
+
+  // Fix single quotes to double quotes
+  fixed = fixed.replace(/'/g, '"');
+
+  // Fix unescaped quotes inside strings (common LLM mistake)
+  fixed = fixed.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"');
+
+  // Fix missing quotes around object keys
+  fixed = fixed.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+
+  // Fix trailing commas
+  fixed = fixed.replace(/,(\s*[}\]])/g, "$1");
+
+  // Fix missing commas between object properties
+  fixed = fixed.replace(/}(\s*)([a-zA-Z_$"'])/g, "},$1$2");
+  fixed = fixed.replace(/](\s*)([a-zA-Z_$"'])/g, "],$1$2");
+
+  console.log("🔧 JSON FIXING PROCESS:");
+  console.log("   Original:", jsonString.substring(0, 200) + "...");
+  console.log("   Fixed:   ", fixed.substring(0, 200) + "...");
+  return fixed;
+}
+
+function normalizeStructuredSelector(
+  parsed: any
+): StructuredElementSelector | null {
+  if (!parsed || typeof parsed !== "object") {
+    console.warn("❌ Invalid parsed object:", parsed);
+    return null;
+  }
+
+  console.log("🔄 Normalizing parsed selector:", parsed);
+
+  // Ensure required fields exist with defaults
+  const normalized: StructuredElementSelector = {
+    type: parsed.type || "any",
+    identifier: parsed.identifier || {},
+    fallbacks: Array.isArray(parsed.fallbacks) ? parsed.fallbacks : [],
+    context: parsed.context,
+    options: parsed.options || { timeout: 10000 },
+  };
+
+  // Validate that we have at least some way to identify the element
+  const hasIdentifier =
+    normalized.identifier && Object.keys(normalized.identifier).length > 0;
+  const hasFallbacks = normalized.fallbacks && normalized.fallbacks.length > 0;
+
+  if (!hasIdentifier && !hasFallbacks) {
+    console.warn(
+      "⚠️ Normalized selector has no identifiers or fallbacks:",
+      normalized
+    );
+    // Add a fallback based on type if possible
+    if (normalized.type && normalized.type !== "any") {
+      normalized.fallbacks = [{ role: getDefaultRoleForType(normalized.type) }];
+      console.log(
+        "✅ Added default fallback based on type:",
+        normalized.fallbacks
+      );
+    } else {
+      return null;
+    }
+  }
+
+  console.log("✅ Successfully normalized selector:", {
+    type: normalized.type,
+    identifierKeys: Object.keys(normalized.identifier),
+    fallbackCount: (normalized.fallbacks || []).length,
+    hasContext: !!normalized.context,
+  });
+  return normalized;
+}
+
+function getDefaultRoleForType(type: string): string {
+  const roleMap: Record<string, string> = {
+    button: "button",
+    input: "textbox",
+    link: "link",
+    select: "combobox",
+    textarea: "textbox",
+    form: "form",
+    div: "generic",
+    span: "generic",
+  };
+  return roleMap[type] || "generic";
+}
+
 // Legacy support - will be removed in future version
 export interface ElementFindOptions {
   timeout?: number;
@@ -47,6 +140,43 @@ export interface WaitOptions {
 function convertLegacySelector(selector: string): StructuredElementSelector {
   // Handle common Playwright selector patterns and convert to structured format
   console.log("Converting legacy selector:", selector);
+
+  // Enhanced JSON parsing - handles structured selectors passed as strings
+  const trimmedSelector = selector.trim();
+  if (trimmedSelector.startsWith("{") && trimmedSelector.endsWith("}")) {
+    try {
+      // Try direct JSON parsing first
+      const parsed = JSON.parse(trimmedSelector);
+      if (parsed && typeof parsed === "object") {
+        // Validate and normalize the parsed object
+        const normalized = normalizeStructuredSelector(parsed);
+        if (normalized) {
+          console.log(
+            "✅ Successfully parsed and normalized JSON selector:",
+            normalized
+          );
+          return normalized;
+        }
+      }
+    } catch (e) {
+      console.warn("❌ Failed to parse JSON selector:", e);
+      // Try to fix common JSON issues and re-parse
+      try {
+        const fixedJson = fixCommonJsonIssues(trimmedSelector);
+        const parsed = JSON.parse(fixedJson);
+        const normalized = normalizeStructuredSelector(parsed);
+        if (normalized) {
+          console.log(
+            "✅ Successfully parsed FIXED JSON selector:",
+            normalized
+          );
+          return normalized;
+        }
+      } catch (e2) {
+        console.warn("❌ Failed to parse even after JSON fixes:", e2);
+      }
+    }
+  }
 
   // Handle text selectors with various formats:
   // - text="Start Challenge"

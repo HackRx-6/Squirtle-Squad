@@ -108,6 +108,29 @@ When interacting with web elements, use this intelligent structured JSON format 
 }
 \`\`\`
 
+## CRITICAL: SELECTOR FORMAT RULES
+
+🚨 **NEVER STRINGIFY JSON SELECTORS** 🚨
+
+❌ **WRONG** - DO NOT do this:
+\`\`\`
+"selector": "{\\"type\\":\\"input\\",\\"identifier\\":{\\"placeholder\\":\\"Enter the hidden text\\"}}"
+\`\`\`
+
+✅ **CORRECT** - Always do this:
+\`\`\`
+"selector": {
+  "type": "input",
+  "identifier": { "placeholder": "Enter the hidden text" }
+}
+\`\`\`
+
+**Key Rules:**
+1. Pass selector as actual JSON object, NOT as stringified JSON
+2. Use proper nested structure for identifier, fallbacks, and options
+3. Always include fallback strategies for reliability
+4. Test selectors progressively from specific to general
+
 ## EXECUTION PRINCIPLES:
 
 1. **COMPLETE ALL WEB TASKS**: Navigate, interact, extract data, and handle all edge cases

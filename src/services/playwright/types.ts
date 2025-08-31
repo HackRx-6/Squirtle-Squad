@@ -1,3 +1,5 @@
+import type { StructuredElementSelector } from "./elementFinder.playwright";
+
 export interface WebAutomationAction {
   type:
     | "click"
@@ -16,7 +18,7 @@ export interface WebAutomationAction {
     | "select_option"
     | "scroll_to_element"
     | "wait_for_element";
-  selector?: string;
+  selector?: string | StructuredElementSelector;
   text?: string;
   url?: string;
   timeout?: number;
@@ -30,7 +32,7 @@ export interface WebAutomationAction {
   // For retrieval actions
   attributeName?: string; // For get_attribute action
   // For wait actions
-  waitState?: 'attached' | 'detached' | 'visible' | 'hidden'; // For wait_for_element action
+  waitState?: "attached" | "detached" | "visible" | "hidden"; // For wait_for_element action
 }
 
 export interface WebAutomationResult {
@@ -67,7 +69,7 @@ export interface HTMLCleaningOptions {
 }
 
 export interface WebAutomationRequest {
-  url: string;
+  url?: string; // Optional for persistent sessions
   actions: WebAutomationAction[];
   options?: {
     headless?: boolean;

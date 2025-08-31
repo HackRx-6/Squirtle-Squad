@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import type { WebAutomationAction } from "./types";
+import type { StructuredElementSelector } from "./elementFinder.playwright";
 import { loggingService } from "../logging";
 import { browserAutomation } from "./browserAutomation.playwright";
 import { elementFinder } from "./elementFinder.playwright";
@@ -7,6 +8,209 @@ import { inputFiller } from "./inputFiller.playwright";
 
 export class ActionExecutor {
   private logger = loggingService.createComponentLogger("ActionExecutor");
+
+  /**
+   * Normalize and convert selector to string format for browserAutomation functions
+   * This handles LLM outputs that may be stringified JSON or malformed JSON
+   */
+  private normalizeSelectorToString(
+    selector: string | StructuredElementSelector | any
+  ): string {
+    console.log("\n🔧 [ActionExecutor] NORMALIZING SELECTOR:");
+    console.log("◆".repeat(60));
+    console.log("📥 Input Selector Type:", typeof selector);
+    console.log("📥 Input Selector:", selector);
+
+    // If it's already a string, check if it's stringified JSON
+    if (typeof selector === "string") {
+      const trimmed = selector.trim();
+
+      // Check if it looks like JSON (starts with { and ends with })
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        console.log("🔍 Detected possible JSON string, attempting to parse...");
+
+        try {
+          // Try to parse as JSON
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object") {
+            console.log("✅ Successfully parsed JSON selector:", parsed);
+            return this.convertStructuredSelectorToString(parsed);
+          }
+        } catch (e) {
+          console.log("⚠️ JSON parsing failed, trying to fix common issues...");
+
+          // Try to fix common LLM JSON issues
+          try {
+            const fixed = this.fixLLMJsonIssues(trimmed);
+            const parsed = JSON.parse(fixed);
+            if (parsed && typeof parsed === "object") {
+              console.log(
+                "✅ Successfully parsed FIXED JSON selector:",
+                parsed
+              );
+              return this.convertStructuredSelectorToString(parsed);
+            }
+          } catch (e2) {
+            console.log(
+              "❌ Even fixed JSON failed to parse, treating as literal string"
+            );
+          }
+        }
+      }
+
+      // It's a regular string selector
+      console.log("✅ Using string selector as-is:", selector);
+      console.log("◆".repeat(60));
+      return selector;
+    }
+
+    // If it's already an object (StructuredElementSelector)
+    if (typeof selector === "object" && selector !== null) {
+      console.log("🏗️ Converting structured object to string selector");
+      const result = this.convertStructuredSelectorToString(selector);
+      console.log("✅ Converted to string:", result);
+      console.log("◆".repeat(60));
+      return result;
+    }
+
+    // Fallback
+    console.log("⚠️ Unknown selector format, converting to string");
+    const result = String(selector);
+    console.log("✅ Fallback string:", result);
+    console.log("◆".repeat(60));
+    return result;
+  }
+
+  /**
+   * Fix common LLM JSON formatting issues
+   */
+  private fixLLMJsonIssues(jsonString: string): string {
+    let fixed = jsonString;
+
+    // Fix escaped quotes
+    fixed = fixed.replace(/\\"/g, '"');
+
+    // Fix single quotes to double quotes
+    fixed = fixed.replace(/'/g, '"');
+
+    // Fix unquoted object keys
+    fixed = fixed.replace(
+      /([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g,
+      '$1"$2":'
+    );
+
+    // Fix trailing commas
+    fixed = fixed.replace(/,(\s*[}\]])/g, "$1");
+
+    // Fix missing quotes around string values that aren't objects/arrays
+    fixed = fixed.replace(
+      /:\s*([^"{\[\]}\s,]+)(?=\s*[,}])/g,
+      (match, value) => {
+        // Don't quote numbers, booleans, null
+        if (/^(true|false|null|\d+(?:\.\d+)?)$/.test(value.trim())) {
+          return match;
+        }
+        return `: "${value.trim()}"`;
+      }
+    );
+
+    console.log("🔧 JSON Fix Process:");
+    console.log("   Original:", jsonString.substring(0, 100) + "...");
+    console.log("   Fixed:   ", fixed.substring(0, 100) + "...");
+
+    return fixed;
+  }
+
+  /**
+   * Convert a StructuredElementSelector to a simple string selector
+   * for compatibility with existing browserAutomation functions
+   */
+  private convertStructuredSelectorToString(
+    structured: StructuredElementSelector
+  ): string {
+    console.log("🔄 Converting structured selector to string:", structured);
+
+    // Extract the most specific identifier
+    const identifier = structured.identifier || {};
+
+    // Priority order for identifiers (most specific first)
+    if (identifier.id) {
+      return `#${identifier.id}`;
+    }
+
+    if (identifier.testId) {
+      return `[data-testid="${identifier.testId}"]`;
+    }
+
+    if (identifier.name) {
+      return `[name="${identifier.name}"]`;
+    }
+
+    if (identifier.placeholder) {
+      return `[placeholder="${identifier.placeholder}"]`;
+    }
+
+    if (identifier.text) {
+      return `text="${identifier.text}"`;
+    }
+
+    if (identifier.textContains) {
+      return `text="${identifier.textContains}"`;
+    }
+
+    if (identifier.className) {
+      return `.${identifier.className}`;
+    }
+
+    if (identifier.classContains) {
+      return `[class*="${identifier.classContains}"]`;
+    }
+
+    if (identifier.ariaLabel) {
+      return `[aria-label="${identifier.ariaLabel}"]`;
+    }
+
+    if (identifier.role) {
+      return `[role="${identifier.role}"]`;
+    }
+
+    if (identifier.href) {
+      return `[href*="${identifier.href}"]`;
+    }
+
+    if (identifier.alt) {
+      return `[alt="${identifier.alt}"]`;
+    }
+
+    if (identifier.attributes) {
+      const attrs = Object.entries(identifier.attributes);
+      if (attrs.length > 0) {
+        const [key, value] = attrs[0]!; // Use first attribute with non-null assertion
+        return `[${key}="${value}"]`;
+      }
+    }
+
+    // If we have a type but no specific identifier, use the element type
+    if (structured.type && structured.type !== "any") {
+      return structured.type;
+    }
+
+    // Fallback to first fallback if available
+    if (structured.fallbacks && structured.fallbacks.length > 0) {
+      const fallback = structured.fallbacks[0];
+      if (fallback) {
+        return this.convertStructuredSelectorToString({
+          type: structured.type,
+          identifier: fallback,
+          fallbacks: [],
+        });
+      }
+    }
+
+    // Last resort fallback
+    console.warn("⚠️ Could not convert structured selector, using wildcard");
+    return "*";
+  }
 
   /**
    * Execute a single web automation action
@@ -215,21 +419,26 @@ export class ActionExecutor {
       throw new Error("Click action requires a selector");
     }
 
+    // Normalize selector to string format
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
+
     this.logger.info(`Executing intelligent click`, {
       actionId,
       selector: action.selector,
+      normalizedSelector,
     });
 
     console.log("\n🖱️ [ActionExecutor] CLICK:");
     console.log("▪".repeat(60));
     console.log("🏷️ Action ID:", actionId);
-    console.log("🎯 Selector:", action.selector);
+    console.log("🎯 Original Selector:", action.selector);
+    console.log("🔧 Normalized Selector:", normalizedSelector);
     console.log("🌐 Current URL:", page.url());
     console.log("⏱️ Timeout:", timeout + "ms");
     console.log("▪".repeat(60));
 
     try {
-      await browserAutomation.click(page, action.selector, {
+      await browserAutomation.click(page, normalizedSelector, {
         timeout,
         retryCount: 3,
         force: false, // Try normal click first, then force if needed
@@ -282,14 +491,18 @@ export class ActionExecutor {
       throw new Error("Type action requires both selector and text");
     }
 
+    // Normalize selector to string format
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
+
     this.logger.info(`Executing intelligent type`, {
       actionId,
       selector: action.selector,
+      normalizedSelector,
       textLength: action.text.length,
     });
 
     try {
-      await browserAutomation.type(page, action.selector, action.text, {
+      await browserAutomation.type(page, normalizedSelector, action.text, {
         timeout,
         retryCount: 3,
         clear: true,
@@ -304,6 +517,7 @@ export class ActionExecutor {
       this.logger.info(`Type completed successfully`, {
         actionId,
         selector: action.selector,
+        normalizedSelector,
       });
     } catch (error) {
       this.logger.error(`Type failed`, {
@@ -322,8 +536,11 @@ export class ActionExecutor {
     actionId: string
   ): Promise<void> {
     if (action.selector) {
+      const normalizedSelector = this.normalizeSelectorToString(
+        action.selector
+      );
       this.logger.info(`Waiting for element: ${action.selector}`, { actionId });
-      await page.waitForSelector(action.selector, { timeout });
+      await page.waitForSelector(normalizedSelector, { timeout });
       this.logger.info(`Element appeared: ${action.selector}`, { actionId });
     } else {
       const waitTime = action.timeout || 1000;
@@ -340,11 +557,14 @@ export class ActionExecutor {
     actionId: string
   ): Promise<void> {
     if (action.selector) {
+      const normalizedSelector = this.normalizeSelectorToString(
+        action.selector
+      );
       this.logger.info(`Scrolling to element: ${action.selector}`, {
         actionId,
       });
-      await page.waitForSelector(action.selector, { timeout });
-      await page.locator(action.selector).scrollIntoViewIfNeeded();
+      await page.waitForSelector(normalizedSelector, { timeout });
+      await page.locator(normalizedSelector).scrollIntoViewIfNeeded();
       this.logger.info(`Scrolled to element: ${action.selector}`, {
         actionId,
       });
@@ -365,11 +585,12 @@ export class ActionExecutor {
       throw new Error("Hover action requires a selector");
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(`Hovering over element: ${action.selector}`, {
       actionId,
     });
-    await page.waitForSelector(action.selector, { timeout });
-    await page.hover(action.selector);
+    await page.waitForSelector(normalizedSelector, { timeout });
+    await page.hover(normalizedSelector);
     this.logger.info(`Hover completed on: ${action.selector}`, { actionId });
   }
 
@@ -383,12 +604,13 @@ export class ActionExecutor {
       throw new Error("Select action requires both selector and text");
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(`Selecting option in: ${action.selector}`, {
       actionId,
       optionValue: action.text,
     });
-    await page.waitForSelector(action.selector, { timeout });
-    await page.selectOption(action.selector, action.text);
+    await page.waitForSelector(normalizedSelector, { timeout });
+    await page.selectOption(normalizedSelector, action.text);
     this.logger.info(`Option selected in: ${action.selector}`, { actionId });
   }
 
@@ -467,13 +689,18 @@ export class ActionExecutor {
         },
       };
 
+      // First normalize the selector to string format to check it
+      const normalizedSelector = this.normalizeSelectorToString(
+        action.selector
+      );
+
       // Handle common Playwright selectors
       if (
-        action.selector.includes("text=") ||
-        action.selector.includes(":has-text(")
+        normalizedSelector.includes("text=") ||
+        normalizedSelector.includes(":has-text(")
       ) {
         // Extract text from text selectors
-        const textMatch = action.selector.match(
+        const textMatch = normalizedSelector.match(
           /text="([^"]+)"|:has-text\("([^"]+)"\)/
         );
         if (textMatch) {
@@ -487,18 +714,18 @@ export class ActionExecutor {
             ];
           }
         }
-      } else if (action.selector.startsWith("#")) {
+      } else if (normalizedSelector.startsWith("#")) {
         // ID selector
-        structuredSelector.identifier = { id: action.selector.substring(1) };
+        structuredSelector.identifier = { id: normalizedSelector.substring(1) };
         structuredSelector.fallbacks = [];
-      } else if (action.selector.startsWith(".")) {
+      } else if (normalizedSelector.startsWith(".")) {
         // Class selector
-        const className = action.selector.substring(1);
+        const className = normalizedSelector.substring(1);
         structuredSelector.identifier = { className };
         structuredSelector.fallbacks = [{ classContains: className }];
       } else {
         // Generic selector - try as text content
-        const cleanText = action.selector.replace(/['"]/g, "");
+        const cleanText = normalizedSelector.replace(/['"]/g, "");
         structuredSelector.identifier = { textContains: cleanText };
         structuredSelector.fallbacks = [
           { classContains: cleanText },
@@ -542,12 +769,13 @@ export class ActionExecutor {
       throw new Error("Get text action requires a selector");
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(`Getting text from element: ${action.selector}`, {
       actionId,
     });
 
     try {
-      const text = await browserAutomation.getText(page, action.selector, {
+      const text = await browserAutomation.getText(page, normalizedSelector, {
         timeout,
         elementFindOptions: {
           timeout,
@@ -584,6 +812,7 @@ export class ActionExecutor {
       );
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(
       `Getting attribute "${action.attributeName}" from element: ${action.selector}`,
       { actionId }
@@ -592,7 +821,7 @@ export class ActionExecutor {
     try {
       const value = await browserAutomation.getAttribute(
         page,
-        action.selector,
+        normalizedSelector,
         action.attributeName,
         {
           timeout,
@@ -633,6 +862,7 @@ export class ActionExecutor {
       );
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(
       `Setting checkbox "${action.selector}" to: ${action.checked}`,
       { actionId }
@@ -641,7 +871,7 @@ export class ActionExecutor {
     try {
       await browserAutomation.setCheckbox(
         page,
-        action.selector,
+        normalizedSelector,
         action.checked,
         {
           timeout,
@@ -681,6 +911,7 @@ export class ActionExecutor {
       );
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(
       `Selecting option "${action.optionValue}" from: ${action.selector}`,
       { actionId }
@@ -689,7 +920,7 @@ export class ActionExecutor {
     try {
       await browserAutomation.selectOption(
         page,
-        action.selector,
+        normalizedSelector,
         action.optionValue,
         {
           timeout,
@@ -727,10 +958,11 @@ export class ActionExecutor {
       throw new Error("Scroll to element action requires a selector");
     }
 
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
     this.logger.info(`Scrolling to element: ${action.selector}`, { actionId });
 
     try {
-      await browserAutomation.scrollToElement(page, action.selector, {
+      await browserAutomation.scrollToElement(page, normalizedSelector, {
         timeout,
         elementFindOptions: {
           timeout,
@@ -763,14 +995,17 @@ export class ActionExecutor {
       throw new Error("Wait for element action requires a selector");
     }
 
+    // Normalize selector to string format
+    const normalizedSelector = this.normalizeSelectorToString(action.selector);
+
     const waitState = action.waitState || "visible";
     this.logger.info(
       `Waiting for element to be ${waitState}: ${action.selector}`,
-      { actionId }
+      { actionId, normalizedSelector }
     );
 
     try {
-      await browserAutomation.waitForElement(page, action.selector, {
+      await browserAutomation.waitForElement(page, normalizedSelector, {
         timeout,
         state: waitState,
         exact: false,
@@ -780,6 +1015,7 @@ export class ActionExecutor {
       this.logger.info(`Element wait completed successfully`, {
         actionId,
         selector: action.selector,
+        normalizedSelector,
         waitState,
       });
     } catch (error) {

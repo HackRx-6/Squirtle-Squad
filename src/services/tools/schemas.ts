@@ -40,13 +40,14 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
       function: {
         name: "web_automation",
         description:
-          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.\n\nIMPORTANT FOR CHALLENGE WEBSITES: Many challenge sites only show input fields AFTER clicking 'Start Challenge' or similar buttons. Always start the challenge first before looking for input fields.\n\nText-based clicking examples: Use 'click' with selectors like '>> text=Start Challenge', 'button:has-text(\"Start\")', or '[role=\"button\"]'.\n\nSmart input filling: Use 'type' action which includes intelligent element finding. It will try multiple strategies to find inputs by placeholder, label, name, etc. Example: {type: 'type', selector: 'username', text: 'myuser'} will find username input field intelligently.",
+          "Perform web browser automation tasks like clicking buttons, filling forms, and navigating pages. Uses persistent browser sessions - the browser and page state will be maintained across multiple tool calls within the same conversation (5-minute timeout). Returns full page content without character limits. Use this when you need to interact with web pages programmatically.\n\nSESSION PERSISTENCE: For follow-up actions on the same page, you can omit the 'url' parameter to continue working on the current page. Only provide 'url' when you need to navigate to a different page.\n\nIMPORTANT FOR CHALLENGE WEBSITES: Many challenge sites only show input fields AFTER clicking 'Start Challenge' or similar buttons. Always start the challenge first before looking for input fields.\n\nText-based clicking examples: Use 'click' with selectors like '>> text=Start Challenge', 'button:has-text(\"Start\")', or '[role=\"button\"]'.\n\nSmart input filling: Use 'type' action which includes intelligent element finding. It will try multiple strategies to find inputs by placeholder, label, name, etc. Example: {type: 'type', selector: 'username', text: 'myuser'} will find username input field intelligently.",
         parameters: {
           type: "object",
           properties: {
             url: {
               type: "string",
-              description: "The URL to navigate to initially",
+              description:
+                "The URL to navigate to initially. Optional for persistent sessions - if omitted, actions will be performed on the current page in the existing browser session.",
             },
             actions: {
               type: "array",
@@ -217,7 +218,7 @@ export const getOpenAIToolsSchemas = (): OpenAITool[] => {
               },
             },
           },
-          required: ["url", "actions"],
+          required: ["actions"],
         },
       },
     },

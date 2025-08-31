@@ -63,19 +63,26 @@ export const executeWebAutomation = async (
 ): Promise<string> => {
   const { url, actions, options } = args;
 
-  if (!url || !actions || !Array.isArray(actions)) {
+  if (!actions || !Array.isArray(actions)) {
     return JSON.stringify({
       ok: false,
-      error: "Invalid arguments: provide url and actions array",
+      error: "Invalid arguments: provide actions array",
     });
   }
 
   try {
-    console.log(`🎭 [WebAutomation] Starting persistent automation for ${url}`);
-
-    // Get or create a persistent session ID
     const sessionTracker = WebAutomationSessionTracker.getInstance();
     const sessionId = sessionTracker.getOrCreateSessionId();
+
+    if (url) {
+      console.log(
+        `🎭 [WebAutomation] Starting automation with navigation to ${url}`
+      );
+    } else {
+      console.log(
+        `🎭 [WebAutomation] Continuing automation on current page (session: ${sessionId})`
+      );
+    }
 
     const result = await playwrightService.executeWebAutomationPersistent(
       {
@@ -115,7 +122,7 @@ export const executeWebAutomation = async (
     // Console log what content is being returned to the LLM
     const responseData = {
       ok: true,
-      url: result.url,
+      // Removed redundant url field - URL is already in pageContent metadata
       pageContent: result.pageContent,
       metadata: result.metadata,
     };
@@ -125,7 +132,7 @@ export const executeWebAutomation = async (
     console.log("\n� [WebAutomation] COMPLETE LLM RESPONSE:");
     console.log("◆".repeat(80));
     console.log("📊 Response Size:", responseString.length, "characters");
-    console.log("🌐 Final URL:", result.url);
+    console.log("🌐 Final URL:", result.url); // Still log for debugging, but not sent to LLM
     console.log("◆".repeat(80));
     console.log("🎯 FULL JSON RESPONSE TO LLM:");
     console.log(responseString);

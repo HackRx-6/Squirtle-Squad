@@ -285,17 +285,47 @@ export class ToolCallingService {
     console.log("◈".repeat(80));
     console.log("🎯 Prompt Type for Instructions:", promptType);
 
+    // Extract URLs from documents to prevent LLM corruption
+    const extractedUrls: string[] = [];
+    const urlRegex = /https?:\/\/[^\s]+/g;
+    const urlMatches = documents.match(urlRegex);
+
+    if (urlMatches) {
+      extractedUrls.push(...urlMatches);
+      console.log("🔗 URLs extracted from documents:", extractedUrls);
+    }
+
     let importantInstructions = "";
 
     // Add specific instructions based on prompt type
     if (promptType === "web") {
-      importantInstructions = `IMPORTANT: 
-1. Use the structured element selector JSON format when interacting with web elements
-2. Complete all web automation tasks thoroughly with proper error handling
-3. Extract all requested data and provide clear, structured results
+      let urlInstructions = "";
+      if (extractedUrls.length > 0) {
+        urlInstructions = `
+
+🌐 EXTRACTED URLs (use these EXACT URLs, do NOT modify them):
+${extractedUrls.map((url, i) => `   ${i + 1}. ${url}`).join("\n")}
+
+`;
+      }
+
+      importantInstructions = `IMPORTANT:${urlInstructions}
+1. Use the EXACT URLs provided above - do NOT modify, truncate, or corrupt them
+2. For web_automation tool selectors:
+   - Simple selectors: Use text like "Submit" or "#login-button"
+   - Complex selectors: Pass as JSON OBJECT (not string), example:
+     {
+       "type": "input",
+       "identifier": {"placeholder": "Enter text"},
+       "fallbacks": [{"attributes": {"type": "text"}}]
+     }
+   - DO NOT stringify JSON selectors - pass them as actual objects
+3. Complete all web automation tasks thoroughly with proper error handling
+4. Extract all requested data and provide clear, structured results
 
 `;
       console.log("✅ Using WEB-SPECIFIC instructions for browser automation");
+      console.log("🔗 Extracted URLs count:", extractedUrls.length);
     } else if (promptType === "autonomous" || promptType === "intelligent") {
       importantInstructions = `IMPORTANT: 
 1. Use printf with \n for writing code files to preserve indentation (NOT cat with heredoc)

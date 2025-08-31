@@ -379,25 +379,48 @@ export class PlaywrightService {
             timeout,
           });
 
-          // Navigate to initial URL if not already included in actions
+          // Navigate to initial URL only if:
+          // 1. URL is provided, AND
+          // 2. There's no navigate action in the sequence, AND
+          // 3. This is a new session or the page hasn't been navigated yet
           const hasNavigateAction = request.actions.some(
             (action) => action.type === "navigate"
           );
-          if (!hasNavigateAction) {
-            this.logger.info("Navigating to initial URL (not in actions)", {
-              sessionId: actualSessionId,
-              url: request.url,
-            });
+
+          const currentUrl = page.url();
+          const isBlankPage = currentUrl === "about:blank" || currentUrl === "";
+
+          if (
+            request.url && // Only navigate if URL is provided
+            !hasNavigateAction &&
+            (isBlankPage || currentUrl !== request.url)
+          ) {
+            this.logger.info(
+              "Navigating to initial URL (new session or different URL)",
+              {
+                sessionId: actualSessionId,
+                currentUrl,
+                targetUrl: request.url,
+                isBlankPage,
+              }
+            );
             await page.goto(request.url, { waitUntil: "domcontentloaded" });
             this.logger.info("Initial navigation completed", {
               sessionId: actualSessionId,
               finalUrl: page.url(),
             });
           } else {
-            this.logger.info(
-              "Navigation action found in sequence, skipping initial navigation",
-              { sessionId: actualSessionId }
-            );
+            this.logger.info("Skipping initial navigation", {
+              sessionId: actualSessionId,
+              currentUrl,
+              targetUrl: request.url || "not provided",
+              hasNavigateAction,
+              reason: !request.url
+                ? "no URL provided (continuing on current page)"
+                : hasNavigateAction
+                ? "navigate action present"
+                : "already on correct page",
+            });
           }
 
           // Execute all actions in sequence
