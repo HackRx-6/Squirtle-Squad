@@ -8,7 +8,7 @@ import {
   GENERIC_MULTI_TOOL_PROMPT,
   INTELLIGENT_TOOL_PROMPT,
   AUTONOMOUS_CODING_PROMPT,
-  AUTONOMOUS_WEB_AGENT_PROMPT,
+  AUTONOMOUS_WEB_AGENT_PROMPT_MINI,
 } from "../../prompts/prompts";
 import type {
   ToolCallingRequest,
@@ -265,7 +265,7 @@ export class ToolCallingService {
 
     switch (promptType) {
       case "web":
-        selectedPrompt = AUTONOMOUS_WEB_AGENT_PROMPT;
+        selectedPrompt = AUTONOMOUS_WEB_AGENT_PROMPT_MINI;
         console.log("✅ Using AUTONOMOUS_WEB_AGENT_PROMPT from prompts.ts");
         break;
       case "intelligent":
@@ -332,19 +332,10 @@ ${extractedUrls.map((url, i) => `   ${i + 1}. ${url}`).join("\n")}
 `;
       }
 
-      importantInstructions = `IMPORTANT:${urlInstructions}
-1. Use the EXACT URLs provided above - do NOT modify, truncate, or corrupt them
-2. For web_automation tool selectors:
-   - Simple selectors: Use text like "Submit" or "#login-button"
-   - Complex selectors: Pass as JSON OBJECT (not string), example:
-     {
-       "type": "input",
-       "identifier": {"placeholder": "Enter text"},
-       "fallbacks": [{"attributes": {"type": "text"}}]
-     }
-   - DO NOT stringify JSON selectors - pass them as actual objects
-3. Complete all web automation tasks thoroughly with proper error handling
-4. Extract all requested data and provide clear, structured results
+      importantInstructions = `IMPORTANT:
+1.  Use specific selectors like "button:has-text('Submit')" to avoid errors.
+2.  If you use a JSON selector, pass it as a JSON OBJECT, not a string.
+3.  Use a direct [click, type, get_text] sequence. DO NOT use manual 'wait' actions.
 
 `;
       console.log("✅ Using WEB-SPECIFIC instructions for browser automation");

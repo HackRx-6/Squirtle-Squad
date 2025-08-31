@@ -74,6 +74,8 @@ export interface StructuredElementSelector {
     href?: string;
     /** Image alt text */
     alt?: string;
+    /** Raw CSS selector for complex selectors that should be used as-is */
+    rawSelector?: string;
   };
 
   /** Fallback strategies if primary identifier fails */
@@ -92,6 +94,7 @@ export interface StructuredElementSelector {
     href?: string;
     alt?: string;
     label?: string; // Associated label text
+    rawSelector?: string; // Raw CSS selector for complex selectors
   }>;
 
   /** Context for more precise targeting */
@@ -447,6 +450,13 @@ export class ElementFinder {
   private buildSelector(type: string, identifier: any, context?: any): string {
     this.logger.debug("Building selector", { type, identifier, context });
     console.log("DEBUG buildSelector:", { type, identifier, context });
+    
+    // Handle raw selectors first - they should be used as-is without modification
+    if (identifier.rawSelector) {
+      console.log("🎯 Using raw CSS selector directly:", identifier.rawSelector);
+      return identifier.rawSelector;
+    }
+    
     let selector = "";
 
     // Start with element type if specified

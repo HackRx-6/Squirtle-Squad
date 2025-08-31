@@ -357,8 +357,24 @@ function convertLegacySelector(selector: string): StructuredElementSelector {
     }
   }
 
+  // Handle complex CSS selectors that should be used as-is
+  // Examples: button.success:has-text('Submit'), div.card h4:has-text('Complete')
+  if (selector.includes('.') || selector.includes(':') || selector.includes(' ') || selector.includes('[')) {
+    console.log("🎯 Complex CSS selector detected, preserving as-is:", selector);
+    return {
+      type: "any",
+      identifier: { 
+        rawSelector: selector 
+      },
+      fallbacks: [],
+      options: {
+        timeout: 10000,
+      },
+    };
+  }
+
   // Handle generic CSS selectors - try to parse element type
-  const elementMatch = selector.match(/^([a-z]+)/);
+  const elementMatch = selector.match(/^([a-z]+)$/); // Only match simple element types
   if (elementMatch && elementMatch[1]) {
     const elementType = elementMatch[1];
     return {
