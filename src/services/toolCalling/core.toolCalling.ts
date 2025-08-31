@@ -373,106 +373,18 @@ ${importantInstructions}Please help me with these questions/tasks. Use the appro
 
   /**
    * Extract meaningful answers from various LLM response formats
-   * This method handles common patterns where the actual answer is embedded in explanatory text
+   * This method now preserves the full LLM response instead of aggressive regex extraction
    */
-  private extractMeaningfulAnswer(response: string): string | null {
-    const lines = response
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    // Pattern 1: Look for completion codes (alphanumeric codes)
-    const completionCodeRegex = /\b([a-f0-9]{6,8}|[A-F0-9]{6,8})\b/g;
-    const codeMatches = response.match(completionCodeRegex);
-    if (codeMatches && codeMatches.length > 0) {
-      // Return the last found code (most likely the answer)
-      const code = codeMatches[codeMatches.length - 1];
-      if (code) {
-        this.logger.debug("Found completion code", { code });
-        return code;
-      }
-    }
-
-    // Pattern 2: Look for lines that contain "Code:" or "Completion Code:" or similar
-    for (const line of lines) {
-      const codeLineRegex =
-        /(?:completion\s*code|answer|code|result):\s*([a-zA-Z0-9]+)/i;
-      const match = line.match(codeLineRegex);
-      if (match && match[1]) {
-        this.logger.debug("Found code in labeled line", {
-          code: match[1],
-          line,
-        });
-        return match[1];
-      }
-    }
-
-    // Pattern 3: Look for markdown bold text that might contain the answer
-    const boldRegex = /\*\*([^*]+)\*\*/g;
-    const boldMatches = [...response.matchAll(boldRegex)];
-    for (const match of boldMatches) {
-      if (match[1]) {
-        const content = match[1].trim();
-        // Check if it looks like a completion code
-        if (/^[a-zA-Z0-9]{4,8}$/.test(content)) {
-          this.logger.debug("Found code in bold text", { code: content });
-          return content;
-        }
-      }
-    }
-
-    // Pattern 4: Look for the last line that might contain just the answer
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      if (!line) continue;
-      // Skip very long lines (likely explanations)
-      if (line.length > 100) continue;
-
-      // Check if this line looks like a completion code
-      if (/^[a-zA-Z0-9]{4,8}$/.test(line)) {
-        this.logger.debug("Found code in last meaningful line", { code: line });
-        return line;
-      }
-    }
-
-    // Pattern 5: Look for any standalone alphanumeric codes in the response
-    const standaloneCodeRegex = /(?:^|\s)([a-zA-Z0-9]{4,8})(?:\s|$)/g;
-    const standaloneMatches = [...response.matchAll(standaloneCodeRegex)];
-    if (standaloneMatches.length > 0) {
-      const lastMatch = standaloneMatches[standaloneMatches.length - 1];
-      if (lastMatch && lastMatch[1]) {
-        const code = lastMatch[1];
-        this.logger.debug("Found standalone code", { code });
-        return code;
-      }
-    }
-
-    // Pattern 6: If response is short and contains meaningful content, return it
-    if (response.length < 200 && response.trim().length > 0) {
-      // Remove common prefixes
-      let cleaned = response
-        .replace(
-          /^(the\s+)?(challenge\s+)?(has\s+been\s+)?(successfully\s+)?(completed\.?\s*)/i,
-          ""
-        )
-        .replace(
-          /^(here('s|\s+is)\s+)?(the\s+)?(answer\s+(to\s+your\s+question)?:?\s*)/i,
-          ""
-        )
-        .replace(/^\*\*completion\s+code:\*\*\s*/i, "")
-        .trim();
-
-      if (cleaned.length > 0 && cleaned !== response.trim()) {
-        this.logger.debug("Found cleaned meaningful content", {
-          original: response.substring(0, 100) + "...",
-          cleaned: cleaned.substring(0, 100) + "...",
-        });
-        return cleaned;
-      }
-    }
-
-    this.logger.debug("No meaningful answer pattern found");
-    return null;
+  private extractMeaningfulAnswer(response: string): string {
+    // Simply return the trimmed response - no aggressive regex patterns
+    const trimmedResponse = response.trim();
+    
+    this.logger.debug("Preserving full LLM response", {
+      responseLength: trimmedResponse.length,
+      responsePreview: trimmedResponse.substring(0, 200) + "..."
+    });
+    
+    return trimmedResponse;
   }
 
   private parseMultipleAnswers(
@@ -524,61 +436,17 @@ ${importantInstructions}Please help me with these questions/tasks. Use the appro
         answers.push(formattedResponse.trim());
       }
     } else {
-      this.logger.warn(
-        "No structured answers found, using advanced fallback parsing",
+      this.logger.info(
+        "No structured answers found, using full response for all questions",
         {
           responseLength: formattedResponse.length,
+          questionsCount: questions.length,
         }
       );
 
-      // Enhanced parsing for common response patterns
-      const extractedAnswer = this.extractMeaningfulAnswer(formattedResponse);
-
-      if (extractedAnswer) {
-        this.logger.info("Successfully extracted meaningful answer", {
-          extractedAnswer: extractedAnswer.substring(0, 100) + "...",
-          originalLength: formattedResponse.length,
-        });
-
-        // Use the extracted answer for all questions
-        for (let i = 0; i < questions.length; i++) {
-          answers.push(extractedAnswer);
-        }
-      } else {
-        // Fallback: try to split by line breaks and map to questions
-        const lines = formattedResponse
-          .split("\n")
-          .filter((line) => line.trim());
-
-        if (lines.length >= questions.length) {
-          this.logger.info("Using line-based answer parsing", {
-            lineCount: lines.length,
-            questionsCount: questions.length,
-          });
-
-          // Use the first N lines as answers
-          for (let i = 0; i < questions.length; i++) {
-            const line = lines[i];
-            if (line) {
-              answers.push(line.trim());
-            } else {
-              answers.push(formattedResponse.trim());
-            }
-          }
-        } else {
-          this.logger.warn(
-            "Using full response for each question as final fallback",
-            {
-              lineCount: lines.length,
-              questionsCount: questions.length,
-            }
-          );
-
-          // Fallback: use the full response for each question
-          for (let i = 0; i < questions.length; i++) {
-            answers.push(formattedResponse.trim());
-          }
-        }
+      // For each question, use the full LLM response
+      for (let i = 0; i < questions.length; i++) {
+        answers.push(formattedResponse.trim());
       }
     }
 
