@@ -134,30 +134,30 @@ export interface ElementFindResult {
  *
  * Supports structured selectors that LLMs can generate consistently, providing
  * multiple fallback strategies and context-aware element location.
- * 
+ *
  * 🚨 CRITICAL FIX: Enhanced DOM Distillation for Multiple Element Disambiguation
- * 
+ *
  * This implementation solves the "Exit vs Submit button" problem through:
- * 
+ *
  * 1. **Robust Rule-Based Selection**: Primary disambiguation logic that heavily
  *    penalizes semantically opposite actions (Exit when looking for Submit)
- * 
+ *
  * 2. **Confidence-Based Strategy**: Uses rule-based selection for high-confidence
  *    cases (>70%) and only falls back to LLM for ambiguous cases
- * 
- * 3. **Enhanced Scoring System**: 
+ *
+ * 3. **Enhanced Scoring System**:
  *    - +25 points for exact text matches
  *    - +20 points for semantic action matches (Submit button for submit action)
  *    - -50 points penalty for opposite actions (Exit button when looking for Submit)
  *    - +15 points for correct button types (type="submit")
  *    - +10 points for proper context (submit buttons in forms)
- * 
+ *
  * 4. **Critical Action Protection**: Special handling for critical actions like
  *    Submit, Save, Continue to prevent catastrophic wrong button clicks
- * 
+ *
  * 5. **Detailed Logging**: Comprehensive logging shows exactly why each element
  *    was scored and which one was selected for debugging
- * 
+ *
  * This prevents the agent from getting stuck in loops by clicking "Exit" instead
  * of "Submit" buttons, which was the core issue causing automation failures.
  */
@@ -346,33 +346,44 @@ export class ElementFinder {
 
       // Check if multiple elements match this selector
       const elementCount = await element.count();
-      
+
       if (elementCount > 1) {
         console.log(`\n� [ElementFinder] MULTIPLE ELEMENTS DETECTED!`);
         console.log(`🔍 Found ${elementCount} elements matching: ${selector}`);
-        console.log(`🎯 Target: ${config.type} with "${JSON.stringify(config.identifier)}"`);
+        console.log(
+          `🎯 Target: ${config.type} with "${JSON.stringify(
+            config.identifier
+          )}"`
+        );
         console.log(`🧠 Initiating DOM Distillation and LLM disambiguation...`);
-        
+
         // Log each element for debugging
         for (let i = 0; i < elementCount; i++) {
           try {
             const currentElement = element.nth(i);
-            const text = await currentElement.textContent() || '';
-            const tagName = await currentElement.evaluate('el => el.tagName.toLowerCase()') as string;
+            const text = (await currentElement.textContent()) || "";
+            const tagName = (await currentElement.evaluate(
+              "el => el.tagName.toLowerCase()"
+            )) as string;
             console.log(`   ${i + 1}. <${tagName}> "${text.trim()}"`);
           } catch (e) {
             console.log(`   ${i + 1}. [Unable to inspect element]`);
           }
         }
-        
+
         // Collect all matching elements
         const elements: Locator[] = [];
         for (let i = 0; i < elementCount; i++) {
           elements.push(element.nth(i));
         }
-        
+
         // Use the disambiguation method
-        return await this.handleMultipleMatches(page, elements, config, strategyName);
+        return await this.handleMultipleMatches(
+          page,
+          elements,
+          config,
+          strategyName
+        );
       }
 
       // Single element found - proceed with normal validation
@@ -633,12 +644,14 @@ export class ElementFinder {
       };
     }
 
-    console.log(`\n🔍 [ElementFinder] MULTIPLE ELEMENTS FOUND (${elements.length})`);
+    console.log(
+      `\n🔍 [ElementFinder] MULTIPLE ELEMENTS FOUND (${elements.length})`
+    );
     console.log("🧠 Starting DOM Distillation and LLM disambiguation...");
 
     // Step 1: Distill element information
     const distilledElements = await this.distillElementInformation(elements);
-    
+
     console.log("\n📊 [ElementFinder] DISTILLED ELEMENT INFORMATION:");
     distilledElements.forEach((element, index) => {
       console.log(`Element ${index + 1}:`);
@@ -649,23 +662,38 @@ export class ElementFinder {
     });
 
     // Step 2: Always run rule-based selection first as it's more reliable
-    const ruleBasedIndex = this.ruleBasedSelection(distilledElements, selectorConfig);
-    console.log(`\n🎯 [ElementFinder] Rule-based selection chose element ${ruleBasedIndex + 1}`);
-    
+    const ruleBasedIndex = this.ruleBasedSelection(
+      distilledElements,
+      selectorConfig
+    );
+    console.log(
+      `\n🎯 [ElementFinder] Rule-based selection chose element ${
+        ruleBasedIndex + 1
+      }`
+    );
+
     // Step 3: Validate rule-based selection with confidence scoring
     const ruleBasedConfidence = this.calculateSelectionConfidence(
-      distilledElements[ruleBasedIndex], 
-      selectorConfig, 
+      distilledElements[ruleBasedIndex],
+      selectorConfig,
       distilledElements
     );
-    
-    console.log(`📊 [ElementFinder] Rule-based confidence: ${ruleBasedConfidence}%`);
-    
+
+    console.log(
+      `📊 [ElementFinder] Rule-based confidence: ${ruleBasedConfidence}%`
+    );
+
     // If rule-based selection has high confidence (>70%), use it
-    if (ruleBasedConfidence >= 70 && ruleBasedIndex >= 0 && ruleBasedIndex < elements.length) {
+    if (
+      ruleBasedConfidence >= 70 &&
+      ruleBasedIndex >= 0 &&
+      ruleBasedIndex < elements.length
+    ) {
       const selectedElement = elements[ruleBasedIndex];
       if (selectedElement) {
-        console.log(`✅ [ElementFinder] Using high-confidence rule-based selection`);
+        console.log(
+          `✅ [ElementFinder] Using high-confidence rule-based selection`
+        );
         return {
           element: selectedElement,
           strategy: `${strategy}-rule-based-high-confidence`,
@@ -675,7 +703,7 @@ export class ElementFinder {
         };
       }
     }
-    
+
     // Step 4: Try LLM disambiguation only for lower confidence cases
     try {
       const selectedIndex = await this.selectBestElement(
@@ -685,11 +713,13 @@ export class ElementFinder {
       );
 
       if (selectedIndex !== -1 && selectedIndex < elements.length) {
-        console.log(`✅ [ElementFinder] LLM selected element ${selectedIndex + 1}`);
+        console.log(
+          `✅ [ElementFinder] LLM selected element ${selectedIndex + 1}`
+        );
         const selectedElement = elements[selectedIndex];
         if (selectedElement) {
           const selector = await this.buildElementSelector(selectedElement);
-          
+
           return {
             element: selectedElement,
             strategy: `${strategy}-llm-disambiguated`,
@@ -719,7 +749,9 @@ export class ElementFinder {
     }
 
     // Step 6: Only if everything fails, fall back to the first element
-    console.log("⚠️ [ElementFinder] All disambiguation methods failed, using first element as last resort");
+    console.log(
+      "⚠️ [ElementFinder] All disambiguation methods failed, using first element as last resort"
+    );
     const fallbackElement = elements[0];
     if (fallbackElement) {
       return {
@@ -744,17 +776,19 @@ export class ElementFinder {
   /**
    * Distill element information for LLM analysis
    */
-  private async distillElementInformation(elements: Locator[]): Promise<Array<{
-    index: number;
-    textContent: string;
-    attributes: Record<string, string>;
-    context: {
-      tagName: string;
-      parentInfo: string;
-      siblingInfo: string;
-      position: { x: number; y: number };
-    };
-  }>> {
+  private async distillElementInformation(elements: Locator[]): Promise<
+    Array<{
+      index: number;
+      textContent: string;
+      attributes: Record<string, string>;
+      context: {
+        tagName: string;
+        parentInfo: string;
+        siblingInfo: string;
+        position: { x: number; y: number };
+      };
+    }>
+  > {
     const distilled: Array<{
       index: number;
       textContent: string;
@@ -769,60 +803,82 @@ export class ElementFinder {
 
     for (let i = 0; i < elements.length; i++) {
       const element = elements[i];
-      
+
       if (!element) continue;
 
       try {
         // Extract key information
-        const textContent = (await element.textContent()) || '';
-        const tagName = (await element.evaluate('el => el.tagName.toLowerCase()')) as string;
-        
+        const textContent = (await element.textContent()) || "";
+        const tagName = (await element.evaluate(
+          "el => el.tagName.toLowerCase()"
+        )) as string;
+
         // Get relevant attributes
         const attributes: Record<string, string> = {};
-        const attrNames = ['id', 'class', 'name', 'type', 'placeholder', 'aria-label', 'role', 'href', 'alt', 'value'];
-        
+        const attrNames = [
+          "id",
+          "class",
+          "name",
+          "type",
+          "placeholder",
+          "aria-label",
+          "role",
+          "href",
+          "alt",
+          "value",
+        ];
+
         for (const attr of attrNames) {
           const value = await element.getAttribute(attr);
           if (value) attributes[attr] = value;
         }
 
         // Get context information
-        const parentInfo = (await element.evaluate('el => {' +
-          'const parent = el.parentElement;' +
-          'return parent ? `${parent.tagName.toLowerCase()}${parent.id ? "#" + parent.id : ""}${parent.className ? "." + parent.className.split(" ")[0] : ""}` : "none";' +
-        '}')) as string;
+        const parentInfo = (await element.evaluate(
+          "el => {" +
+            "const parent = el.parentElement;" +
+            'return parent ? `${parent.tagName.toLowerCase()}${parent.id ? "#" + parent.id : ""}${parent.className ? "." + parent.className.split(" ")[0] : ""}` : "none";' +
+            "}"
+        )) as string;
 
-        const siblingInfo = (await element.evaluate('el => {' +
-          'const siblings = Array.from(el.parentElement?.children || []);' +
-          'const index = siblings.indexOf(el);' +
-          'return `${index + 1} of ${siblings.length}`;' +
-        '}')) as string;
+        const siblingInfo = (await element.evaluate(
+          "el => {" +
+            "const siblings = Array.from(el.parentElement?.children || []);" +
+            "const index = siblings.indexOf(el);" +
+            "return `${index + 1} of ${siblings.length}`;" +
+            "}"
+        )) as string;
 
-        const position = (await element.boundingBox()) || { x: 0, y: 0, width: 0, height: 0 };
+        const position = (await element.boundingBox()) || {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+        };
 
         distilled.push({
           index: i,
           textContent: textContent.trim().substring(0, 100), // Limit text length
           attributes,
           context: {
-            tagName: tagName || 'unknown',
-            parentInfo: parentInfo || 'unknown',
-            siblingInfo: siblingInfo || 'unknown',
+            tagName: tagName || "unknown",
+            parentInfo: parentInfo || "unknown",
+            siblingInfo: siblingInfo || "unknown",
             position: { x: Math.round(position.x), y: Math.round(position.y) },
-          }
+          },
         });
       } catch (error) {
         // If we can't get info for an element, mark it as problematic
         distilled.push({
           index: i,
-          textContent: '',
+          textContent: "",
           attributes: {},
           context: {
-            tagName: 'unknown',
-            parentInfo: 'unknown',
-            siblingInfo: 'unknown',
+            tagName: "unknown",
+            parentInfo: "unknown",
+            siblingInfo: "unknown",
             position: { x: 0, y: 0 },
-          }
+          },
         });
       }
     }
@@ -844,8 +900,12 @@ export class ElementFinder {
     strategy: string
   ): Promise<number> {
     // Create a structured prompt for the LLM
-    const prompt = this.buildDisambiguationPrompt(distilledElements, selectorConfig, strategy);
-    
+    const prompt = this.buildDisambiguationPrompt(
+      distilledElements,
+      selectorConfig,
+      strategy
+    );
+
     console.log("\n🧠 [ElementFinder] LLM Disambiguation Prompt:");
     console.log("▼".repeat(80));
     console.log(prompt);
@@ -853,9 +913,14 @@ export class ElementFinder {
 
     try {
       // First try calling an actual LLM service if available
-      const llmResult = await this.callLLMService(prompt, distilledElements.length);
+      const llmResult = await this.callLLMService(
+        prompt,
+        distilledElements.length
+      );
       if (llmResult !== -1) {
-        console.log(`🤖 [ElementFinder] LLM service selected element ${llmResult + 1}`);
+        console.log(
+          `🤖 [ElementFinder] LLM service selected element ${llmResult + 1}`
+        );
         return llmResult;
       }
     } catch (error) {
@@ -870,34 +935,19 @@ export class ElementFinder {
   /**
    * Call LLM service for element disambiguation
    */
-  private async callLLMService(prompt: string, elementCount: number): Promise<number> {
+  private async callLLMService(
+    prompt: string,
+    elementCount: number
+  ): Promise<number> {
     try {
       // This would integrate with your LLM service
       // For now, we'll use a mock implementation that you can replace
-      
-      // Try to import LLM service if available
-      try {
-        const llmModule = await import('../LLM');
-        if (llmModule && 'llmService' in llmModule && llmModule.llmService) {
-          const response = await (llmModule.llmService as any).generateResponse(prompt, {
-            maxTokens: 50,
-            temperature: 0.1, // Low temperature for more deterministic results
-            systemPrompt: "You are an expert web automation assistant. Respond with only the number of the best element choice."
-          });
 
-          // Parse the response to get the element number
-          const match = response.match(/\b(\d+)\b/);
-          if (match) {
-            const selectedNumber = parseInt(match[1], 10);
-            if (selectedNumber >= 1 && selectedNumber <= elementCount) {
-              return selectedNumber - 1; // Convert to 0-based index
-            }
-          }
-        }
-      } catch (importError) {
-        console.log("📝 [ElementFinder] LLM service not available, using rule-based selection");
-      }
-      
+      // Use rule-based selection for element disambiguation
+      console.log(
+        "📝 [ElementFinder] Using rule-based selection for element disambiguation"
+      );
+
       return -1; // LLM service not available or invalid response
     } catch (error) {
       console.log("🚫 [ElementFinder] LLM service error:", error);
@@ -913,21 +963,25 @@ export class ElementFinder {
     selectorConfig: StructuredElementSelector,
     strategy: string
   ): string {
-    const targetDescription = JSON.stringify(selectorConfig.identifier, null, 2);
-    
+    const targetDescription = JSON.stringify(
+      selectorConfig.identifier,
+      null,
+      2
+    );
+
     let prompt = `CRITICAL WEB AUTOMATION ELEMENT DISAMBIGUATION\n\n`;
     prompt += `I found ${distilledElements.length} elements that match the selector for a ${selectorConfig.type} element.\n`;
     prompt += `Target criteria: ${targetDescription}\n\n`;
-    
+
     // Add specific guidance for common disambiguation scenarios
-    const targetText = selectorConfig.identifier.text?.toLowerCase() || '';
-    if (targetText.includes('submit')) {
+    const targetText = selectorConfig.identifier.text?.toLowerCase() || "";
+    if (targetText.includes("submit")) {
       prompt += `⚠️ CRITICAL: This is a SUBMIT action. You must avoid Exit/Cancel/Close buttons at all costs!\n`;
       prompt += `Look for buttons with text exactly matching "Submit" or buttons with type="submit".\n`;
       prompt += `NEVER select Exit, Cancel, Close, Back, or similar negative actions.\n\n`;
-    } else if (targetText.includes('save')) {
+    } else if (targetText.includes("save")) {
       prompt += `⚠️ CRITICAL: This is a SAVE action. Avoid Delete/Cancel/Discard buttons.\n\n`;
-    } else if (targetText.includes('continue') || targetText.includes('next')) {
+    } else if (targetText.includes("continue") || targetText.includes("next")) {
       prompt += `⚠️ CRITICAL: This is a FORWARD action. Avoid Back/Previous/Cancel buttons.\n\n`;
     }
 
@@ -937,16 +991,22 @@ export class ElementFinder {
       prompt += `Element ${index + 1}:\n`;
       prompt += `  Text Content: "${element.textContent}"\n`;
       prompt += `  Tag: ${element.context.tagName}\n`;
-      prompt += `  Attributes: ${JSON.stringify(element.attributes, null, 4)}\n`;
+      prompt += `  Attributes: ${JSON.stringify(
+        element.attributes,
+        null,
+        4
+      )}\n`;
       prompt += `  Parent: ${element.context.parentInfo}\n`;
       prompt += `  Position: ${element.context.siblingInfo}\n`;
       prompt += `  Screen Position: (${element.context.position.x}, ${element.context.position.y})\n`;
-      
+
       // Add warning flags for problematic buttons
-      if (targetText.includes('submit') && 
-          (element.textContent.toLowerCase().includes('exit') || 
-           element.textContent.toLowerCase().includes('cancel') ||
-           element.textContent.toLowerCase().includes('close'))) {
+      if (
+        targetText.includes("submit") &&
+        (element.textContent.toLowerCase().includes("exit") ||
+          element.textContent.toLowerCase().includes("cancel") ||
+          element.textContent.toLowerCase().includes("close"))
+      ) {
         prompt += `  ⚠️ WARNING: This appears to be a negative action button - NOT suitable for submit!\n`;
       }
       prompt += `\n`;
@@ -987,53 +1047,76 @@ export class ElementFinder {
       if (identifier.text && element.textContent.includes(identifier.text)) {
         score += 10;
         scoreBreakdown.push(`text match (+10)`);
-        
+
         // Special handling for common button scenarios
-        if (selectorConfig.type === 'button' || element.context.tagName === 'button') {
+        if (
+          selectorConfig.type === "button" ||
+          element.context.tagName === "button"
+        ) {
           const text = element.textContent.toLowerCase().trim();
           const targetText = identifier.text.toLowerCase().trim();
-          
+
           // Heavily favor exact matches for critical actions
           if (text === targetText) {
             score += 25;
             scoreBreakdown.push(`exact text match (+25)`);
           }
-          
+
           // Critical: Handle Submit vs Exit disambiguation
-          if (targetText.includes('submit')) {
-            if (text.includes('submit')) {
+          if (targetText.includes("submit")) {
+            if (text.includes("submit")) {
               score += 20;
               scoreBreakdown.push(`submit button match (+20)`);
-            } else if (text.includes('exit') || text.includes('cancel') || text.includes('close') || text.includes('back')) {
+            } else if (
+              text.includes("exit") ||
+              text.includes("cancel") ||
+              text.includes("close") ||
+              text.includes("back")
+            ) {
               score -= 50; // Heavy penalty for negative actions when looking for submit
               scoreBreakdown.push(`negative action penalty (-50)`);
             }
           }
-          
+
           // Similar logic for other action types
-          if (targetText.includes('save')) {
-            if (text.includes('save')) {
+          if (targetText.includes("save")) {
+            if (text.includes("save")) {
               score += 20;
               scoreBreakdown.push(`save button match (+20)`);
-            } else if (text.includes('delete') || text.includes('cancel') || text.includes('discard')) {
+            } else if (
+              text.includes("delete") ||
+              text.includes("cancel") ||
+              text.includes("discard")
+            ) {
               score -= 30;
               scoreBreakdown.push(`destructive action penalty (-30)`);
             }
           }
-          
-          if (targetText.includes('continue') || targetText.includes('next')) {
-            if (text.includes('continue') || text.includes('next') || text.includes('proceed')) {
+
+          if (targetText.includes("continue") || targetText.includes("next")) {
+            if (
+              text.includes("continue") ||
+              text.includes("next") ||
+              text.includes("proceed")
+            ) {
               score += 20;
               scoreBreakdown.push(`continue action match (+20)`);
-            } else if (text.includes('back') || text.includes('previous') || text.includes('cancel')) {
+            } else if (
+              text.includes("back") ||
+              text.includes("previous") ||
+              text.includes("cancel")
+            ) {
               score -= 30;
               scoreBreakdown.push(`backward action penalty (-30)`);
             }
           }
         }
       }
-      
-      if (identifier.textContains && element.textContent.includes(identifier.textContains)) {
+
+      if (
+        identifier.textContains &&
+        element.textContent.includes(identifier.textContains)
+      ) {
         score += 8;
         scoreBreakdown.push(`text contains (+8)`);
       }
@@ -1047,31 +1130,53 @@ export class ElementFinder {
         score += 12;
         scoreBreakdown.push(`name match (+12)`);
       }
-      if (identifier.className && element.attributes.class?.includes(identifier.className)) {
+      if (
+        identifier.className &&
+        element.attributes.class?.includes(identifier.className)
+      ) {
         score += 8;
         scoreBreakdown.push(`class match (+8)`);
       }
-      if (identifier.classContains && element.attributes.class?.includes(identifier.classContains)) {
+      if (
+        identifier.classContains &&
+        element.attributes.class?.includes(identifier.classContains)
+      ) {
         score += 6;
         scoreBreakdown.push(`class contains (+6)`);
       }
-      if (identifier.testId && element.attributes['data-testid'] === identifier.testId) {
+      if (
+        identifier.testId &&
+        element.attributes["data-testid"] === identifier.testId
+      ) {
         score += 15;
         scoreBreakdown.push(`testId match (+15)`);
       }
-      if (identifier.placeholder && element.attributes.placeholder === identifier.placeholder) {
+      if (
+        identifier.placeholder &&
+        element.attributes.placeholder === identifier.placeholder
+      ) {
         score += 10;
         scoreBreakdown.push(`placeholder match (+10)`);
       }
-      if (identifier.ariaLabel && element.attributes['aria-label'] === identifier.ariaLabel) {
+      if (
+        identifier.ariaLabel &&
+        element.attributes["aria-label"] === identifier.ariaLabel
+      ) {
         score += 10;
         scoreBreakdown.push(`aria-label match (+10)`);
       }
 
       // Additional button-specific scoring
-      if ((selectorConfig.type === 'button' || element.context.tagName === 'button') && element.attributes.type) {
+      if (
+        (selectorConfig.type === "button" ||
+          element.context.tagName === "button") &&
+        element.attributes.type
+      ) {
         const buttonType = element.attributes.type.toLowerCase();
-        if (buttonType === 'submit' && identifier.text?.toLowerCase().includes('submit')) {
+        if (
+          buttonType === "submit" &&
+          identifier.text?.toLowerCase().includes("submit")
+        ) {
           score += 15; // Strong favor for submit type buttons when looking for submit
           scoreBreakdown.push(`submit type button (+15)`);
         }
@@ -1081,14 +1186,22 @@ export class ElementFinder {
       if (element.context.parentInfo) {
         const parentInfo = element.context.parentInfo.toLowerCase();
         // Prefer buttons inside forms when looking for submit
-        if (parentInfo.includes('form') && identifier.text?.toLowerCase().includes('submit')) {
+        if (
+          parentInfo.includes("form") &&
+          identifier.text?.toLowerCase().includes("submit")
+        ) {
           score += 10;
           scoreBreakdown.push(`form context (+10)`);
         }
-        
+
         // Prefer buttons in action areas for action buttons
-        if ((parentInfo.includes('action') || parentInfo.includes('button') || parentInfo.includes('control')) && 
-            (identifier.text?.toLowerCase().includes('submit') || identifier.text?.toLowerCase().includes('save'))) {
+        if (
+          (parentInfo.includes("action") ||
+            parentInfo.includes("button") ||
+            parentInfo.includes("control")) &&
+          (identifier.text?.toLowerCase().includes("submit") ||
+            identifier.text?.toLowerCase().includes("save"))
+        ) {
           score += 5;
           scoreBreakdown.push(`action context (+5)`);
         }
@@ -1097,10 +1210,18 @@ export class ElementFinder {
       // CSS class hints for button priority
       if (element.attributes.class) {
         const classes = element.attributes.class.toLowerCase();
-        if (classes.includes('primary') || classes.includes('main') || classes.includes('submit')) {
+        if (
+          classes.includes("primary") ||
+          classes.includes("main") ||
+          classes.includes("submit")
+        ) {
           score += 8;
           scoreBreakdown.push(`primary class (+8)`);
-        } else if (classes.includes('secondary') || classes.includes('cancel') || classes.includes('danger')) {
+        } else if (
+          classes.includes("secondary") ||
+          classes.includes("cancel") ||
+          classes.includes("danger")
+        ) {
           score -= 5;
           scoreBreakdown.push(`secondary class (-5)`);
         }
@@ -1113,14 +1234,22 @@ export class ElementFinder {
       }
 
       // Prefer elements with more specific attributes (indicates intentional design)
-      const attributeBonus = Math.min(Object.keys(element.attributes).length * 0.5, 3);
+      const attributeBonus = Math.min(
+        Object.keys(element.attributes).length * 0.5,
+        3
+      );
       if (attributeBonus > 0) {
         score += attributeBonus;
         scoreBreakdown.push(`attribute richness (+${attributeBonus})`);
       }
 
-      console.log(`Element ${index + 1} ("${element.textContent.substring(0, 30)}") score: ${score}`);
-      console.log(`  Breakdown: ${scoreBreakdown.join(', ')}`);
+      console.log(
+        `Element ${index + 1} ("${element.textContent.substring(
+          0,
+          30
+        )}") score: ${score}`
+      );
+      console.log(`  Breakdown: ${scoreBreakdown.join(", ")}`);
 
       if (score > bestScore) {
         bestScore = score;
@@ -1128,9 +1257,18 @@ export class ElementFinder {
       }
     });
 
-    console.log(`\n� [ElementFinder] Rule-based selection: Element ${bestIndex + 1} (score: ${bestScore})`);
-    console.log(`    Selected: "${distilledElements[bestIndex]?.textContent?.substring(0, 50)}"`);
-    
+    console.log(
+      `\n� [ElementFinder] Rule-based selection: Element ${
+        bestIndex + 1
+      } (score: ${bestScore})`
+    );
+    console.log(
+      `    Selected: "${distilledElements[bestIndex]?.textContent?.substring(
+        0,
+        50
+      )}"`
+    );
+
     return bestIndex;
   }
 
@@ -1143,55 +1281,76 @@ export class ElementFinder {
     allElements: Array<any>
   ): number {
     if (!selectedElement) return 0;
-    
+
     let confidence = 50; // Base confidence
     const identifier = selectorConfig.identifier;
-    
+
     // Exact text match boosts confidence significantly
     if (identifier.text && selectedElement.textContent === identifier.text) {
       confidence += 30;
-    } else if (identifier.text && selectedElement.textContent.includes(identifier.text)) {
+    } else if (
+      identifier.text &&
+      selectedElement.textContent.includes(identifier.text)
+    ) {
       confidence += 20;
     }
-    
+
     // Exact attribute matches boost confidence
     if (identifier.id && selectedElement.attributes.id === identifier.id) {
       confidence += 25;
     }
-    if (identifier.testId && selectedElement.attributes['data-testid'] === identifier.testId) {
+    if (
+      identifier.testId &&
+      selectedElement.attributes["data-testid"] === identifier.testId
+    ) {
       confidence += 25;
     }
-    if (identifier.name && selectedElement.attributes.name === identifier.name) {
+    if (
+      identifier.name &&
+      selectedElement.attributes.name === identifier.name
+    ) {
       confidence += 20;
     }
-    
+
     // Button type matching for submit buttons
-    if (selectorConfig.type === 'button' && identifier.text?.toLowerCase().includes('submit')) {
-      if (selectedElement.attributes.type === 'submit') {
+    if (
+      selectorConfig.type === "button" &&
+      identifier.text?.toLowerCase().includes("submit")
+    ) {
+      if (selectedElement.attributes.type === "submit") {
         confidence += 20;
       }
       // Penalize if it's an exit/cancel button when looking for submit
       const text = selectedElement.textContent.toLowerCase();
-      if (text.includes('exit') || text.includes('cancel') || text.includes('close')) {
+      if (
+        text.includes("exit") ||
+        text.includes("cancel") ||
+        text.includes("close")
+      ) {
         confidence -= 30;
       }
     }
-    
+
     // Form context for submit buttons
-    if (identifier.text?.toLowerCase().includes('submit') && 
-        selectedElement.context.parentInfo?.includes('form')) {
+    if (
+      identifier.text?.toLowerCase().includes("submit") &&
+      selectedElement.context.parentInfo?.includes("form")
+    ) {
       confidence += 15;
     }
-    
+
     // Reduce confidence if there are many similar elements (ambiguous)
-    const similarElements = allElements.filter(el => 
-      el.textContent.toLowerCase().includes(selectedElement.textContent.toLowerCase()) ||
-      el.context.tagName === selectedElement.context.tagName
+    const similarElements = allElements.filter(
+      (el) =>
+        el.textContent
+          .toLowerCase()
+          .includes(selectedElement.textContent.toLowerCase()) ||
+        el.context.tagName === selectedElement.context.tagName
     );
     if (similarElements.length > 2) {
       confidence -= 10;
     }
-    
+
     return Math.min(Math.max(confidence, 0), 100); // Clamp between 0-100
   }
 
@@ -1200,25 +1359,27 @@ export class ElementFinder {
    */
   private async buildElementSelector(element: Locator): Promise<string> {
     try {
-      const id = await element.getAttribute('id');
+      const id = await element.getAttribute("id");
       if (id) return `#${id}`;
 
-      const className = await element.getAttribute('class');
+      const className = await element.getAttribute("class");
       if (className) {
-        const firstClass = className.split(' ')[0];
+        const firstClass = className.split(" ")[0];
         if (firstClass) return `.${firstClass}`;
       }
 
-      const name = await element.getAttribute('name');
+      const name = await element.getAttribute("name");
       if (name) return `[name="${name}"]`;
 
-      const testId = await element.getAttribute('data-testid');
+      const testId = await element.getAttribute("data-testid");
       if (testId) return `[data-testid="${testId}"]`;
 
-      const tagName = await element.evaluate('el => el.tagName.toLowerCase()') as string;
+      const tagName = (await element.evaluate(
+        "el => el.tagName.toLowerCase()"
+      )) as string;
       return tagName;
     } catch (error) {
-      return 'unknown';
+      return "unknown";
     }
   }
 }
