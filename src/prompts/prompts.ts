@@ -252,6 +252,79 @@ For challenge/completion scenarios, use these SPECIFIC selectors:
 - ❌ \\\`div:has-text('Completion Code')\\\` (matches 13+ elements!)
 - ❌ \\\`div\\\` without specific identifier
 
+## 🚨 CRITICAL: MULTIPLE ELEMENT DISAMBIGUATION
+
+### AVOID AMBIGUOUS BUTTON SELECTION:
+When multiple buttons exist (e.g., "Submit" and "Exit"), NEVER use generic selectors that could match both.
+
+**❌ DANGEROUS - Causes Incorrect Selection:**
+\\\`\\\`\\\`json
+{
+  "type": "button",
+  "identifier": { "textContains": "Submit" }  // Could match "Submit" OR "Exit" buttons!
+}
+\\\`\\\`\\\`
+
+**✅ SAFE - Precise Button Targeting:**
+\\\`\\\`\\\`json
+{
+  "type": "button",
+  "identifier": { "text": "Submit" },  // Exact text match
+  "fallbacks": [
+    { "attributes": { "type": "submit" } },
+    { "attributes": { "value": "Submit" } },
+    { "textContains": "Submit", "attributes": { "class": "primary" } }
+  ],
+  "context": { "parent": "form" }  // Must be inside a form
+}
+\\\`\\\`\\\`
+
+### INTENT-BASED BUTTON PRIORITIZATION:
+The system automatically prioritizes buttons based on context:
+
+**HIGH PRIORITY (Preferred):**
+- Buttons with text: "Submit", "Save", "Continue", "Next", "Confirm"
+- Buttons with type="submit"
+- Buttons with classes: "primary", "btn-primary", "submit"
+- Buttons inside forms
+
+**LOW PRIORITY (Avoided):**
+- Buttons with text: "Exit", "Cancel", "Back", "Close", "Abort"
+- Buttons with classes: "secondary", "danger", "cancel"
+- Buttons outside forms
+
+### MULTI-ELEMENT HANDLING STRATEGY:
+When multiple elements match your selector:
+1. **DOM Distillation**: System extracts key attributes of each match
+2. **Context Analysis**: Evaluates element purpose and importance  
+3. **Intent Matching**: Selects element that best matches your intended action
+4. **Fallback Rules**: Uses rule-based selection if LLM analysis fails
+
+**Example: System finds both "Submit" and "Exit" buttons**
+\\\`\\\`\\\`
+🔍 Multiple elements found for selector: { "type": "button", "textContains": "mit" }
+
+Element 1: Submit
+- Text: "Submit"
+- Attributes: type="submit", class="btn btn-primary"
+- Context: Inside form#login-form
+- Priority: HIGH (form submission button)
+
+Element 2: Exit  
+- Text: "Exit"
+- Attributes: class="btn btn-secondary"
+- Context: Outside form, in header
+- Priority: LOW (navigation button)
+
+✅ Selected: Element 1 (Submit) - Best matches intent
+\\\`\\\`\\\`
+
+### PREVENTION STRATEGIES:
+1. **Use Exact Text**: Prefer exact matches over partial text
+2. **Add Context**: Specify parent elements (forms, sections)
+3. **Use Attributes**: Include type, class, or role attributes
+4. **Provide Fallbacks**: Multiple specific fallback strategies
+
 ### 🔧 ERROR RECOVERY STRATEGIES:
 
 **If "strict mode violation" occurs:**

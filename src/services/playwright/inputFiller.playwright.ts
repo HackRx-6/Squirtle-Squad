@@ -1,6 +1,6 @@
 import type { Page, Locator } from "playwright";
 import { loggingService } from "../logging";
-import { elementFinder, type ElementFindOptions, type ElementFindResult } from "./elementFinder.playwright";
+import { elementFinder, type StructuredElementSelector, type ElementFindResult } from "./elementFinder.playwright";
 
 export interface InputFillOptions {
   clear?: boolean;
@@ -9,7 +9,7 @@ export interface InputFillOptions {
   force?: boolean;
   validate?: boolean;
   retryCount?: number;
-  elementFindOptions?: ElementFindOptions;
+  elementFindOptions?: Partial<StructuredElementSelector>;
 }
 
 export interface InputFillResult {
@@ -43,6 +43,44 @@ export class InputFiller {
   private logger = loggingService.createComponentLogger("InputFiller");
 
   /**
+   * Convert a string identifier to a structured selector identifier
+   */
+  private createIdentifierFromString(identifier: string): StructuredElementSelector['identifier'] {
+    // If it looks like a CSS selector
+    if (identifier.startsWith('#')) {
+      return { id: identifier.substring(1) };
+    }
+    if (identifier.startsWith('.')) {
+      return { className: identifier.substring(1) };
+    }
+    if (identifier.startsWith('[') && identifier.endsWith(']')) {
+      // Parse attribute selector like [name="email"]
+      const match = identifier.match(/\[(\w+)(?:="?([^"]*)"?)?\]/);
+      if (match) {
+        const [, attrName, attrValue] = match;
+        if (attrName === 'name') return { name: attrValue || '' };
+        if (attrName === 'id') return { id: attrValue || '' };
+        if (attrName === 'placeholder') return { placeholder: attrValue || '' };
+        if (attrName === 'data-testid') return { testId: attrValue || '' };
+        const attributes: Record<string, string> = {};
+        if (attrName) {
+          attributes[attrName] = attrValue || '';
+        }
+        return { attributes };
+      }
+    }
+    
+    // Default fallback - try multiple strategies
+    return {
+      name: identifier,
+      id: identifier,
+      testId: identifier,
+      placeholder: identifier,
+      ariaLabel: identifier
+    };
+  }
+
+  /**
    * Fill a single input element with intelligent finding and validation
    */
   async fillInput(
@@ -72,12 +110,21 @@ export class InputFiller {
     
     for (let attempt = 1; attempt <= retryCount; attempt++) {
       try {
+        // Create structured selector for input element
+        const selectorConfig: StructuredElementSelector = {
+          type: 'input',
+          identifier: this.createIdentifierFromString(identifier),
+          ...elementFindOptions,
+          options: {
+            timeout: timeout / retryCount,
+            visible: true,
+            enabled: true,
+            ...elementFindOptions?.options
+          }
+        };
+
         // Find the input element
-        const findResult = await elementFinder.findInputElement(
-          page,
-          identifier,
-          { ...elementFindOptions, timeout: timeout / retryCount }
-        );
+        const findResult = await elementFinder.findElement(page, selectorConfig);
 
         if (!findResult.found) {
           lastError = `Element not found: ${identifier}`;
@@ -237,11 +284,20 @@ export class InputFiller {
 
     for (let attempt = 1; attempt <= retryCount; attempt++) {
       try {
-        const findResult = await elementFinder.findInputElement(
-          page,
-          identifier,
-          { ...elementFindOptions, timeout: timeout / retryCount }
-        );
+        // Create structured selector for select element
+        const selectorConfig: StructuredElementSelector = {
+          type: 'select',
+          identifier: this.createIdentifierFromString(identifier),
+          ...elementFindOptions,
+          options: {
+            timeout: timeout / retryCount,
+            visible: true,
+            enabled: true,
+            ...elementFindOptions?.options
+          }
+        };
+
+        const findResult = await elementFinder.findElement(page, selectorConfig);
 
         if (!findResult.found) {
           continue;
@@ -309,11 +365,20 @@ export class InputFiller {
 
     for (let attempt = 1; attempt <= retryCount; attempt++) {
       try {
-        const findResult = await elementFinder.findInputElement(
-          page,
-          identifier,
-          { ...elementFindOptions, timeout: timeout / retryCount }
-        );
+        // Create structured selector for checkbox/radio element
+        const selectorConfig: StructuredElementSelector = {
+          type: 'input',
+          identifier: this.createIdentifierFromString(identifier),
+          ...elementFindOptions,
+          options: {
+            timeout: timeout / retryCount,
+            visible: true,
+            enabled: true,
+            ...elementFindOptions?.options
+          }
+        };
+
+        const findResult = await elementFinder.findElement(page, selectorConfig);
 
         if (!findResult.found) {
           continue;

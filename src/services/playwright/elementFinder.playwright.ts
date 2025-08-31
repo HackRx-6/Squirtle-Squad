@@ -318,6 +318,42 @@ export class ElementFinder {
 
       const element = page.locator(selector);
 
+      // Check if multiple elements match this selector
+      const elementCount = await element.count();
+      
+      if (elementCount > 1) {
+        console.log(`\n� [ElementFinder] MULTIPLE ELEMENTS DETECTED!`);
+        console.log(`🔍 Found ${elementCount} elements matching: ${selector}`);
+        console.log(`🎯 Target: ${config.type} with "${JSON.stringify(config.identifier)}"`);
+        console.log(`🧠 Initiating DOM Distillation and LLM disambiguation...`);
+        
+        // Log each element for debugging
+        for (let i = 0; i < elementCount; i++) {
+          try {
+            const currentElement = element.nth(i);
+            const text = await currentElement.textContent() || '';
+            const tagName = await currentElement.evaluate('el => el.tagName.toLowerCase()') as string;
+            console.log(`   ${i + 1}. <${tagName}> "${text.trim()}"`);
+          } catch (e) {
+            console.log(`   ${i + 1}. [Unable to inspect element]`);
+          }
+        }
+        
+        // Collect all matching elements
+        const elements: Locator[] = [];
+        for (let i = 0; i < elementCount; i++) {
+          elements.push(element.nth(i));
+        }
+        
+        // Use the disambiguation method
+        return await this.handleMultipleMatches(page, elements, config, strategyName);
+      }
+
+      // Single element found - proceed with normal validation
+      if (elementCount === 0) {
+        throw new Error("No elements found");
+      }
+
       // Apply additional filters if specified
       if (config.options?.visible !== false) {
         // For input elements, be more lenient with visibility checks
@@ -336,7 +372,7 @@ export class ElementFinder {
         }
       }
 
-      this.logger.info(`Element found using ${strategyName} strategy`, {
+      this.logger.info(`Single element found using ${strategyName} strategy`, {
         selector,
       });
 
@@ -550,6 +586,429 @@ export class ElementFinder {
       found: false,
       confidence: 0,
     };
+  }
+
+  /**
+   * Handle multiple element matches with LLM disambiguation
+   */
+  private async handleMultipleMatches(
+    page: Page,
+    elements: Locator[],
+    selectorConfig: StructuredElementSelector,
+    strategy: string
+  ): Promise<ElementFindResult> {
+    if (elements.length === 0) {
+      return {
+        element: page.locator("not-found"),
+        strategy: "no-elements",
+        selector: "none",
+        found: false,
+        confidence: 0,
+      };
+    }
+
+    console.log(`\n🔍 [ElementFinder] MULTIPLE ELEMENTS FOUND (${elements.length})`);
+    console.log("🧠 Starting DOM Distillation and LLM disambiguation...");
+
+    // Step 1: Distill element information
+    const distilledElements = await this.distillElementInformation(elements);
+    
+    // Step 2: Use LLM to select the best element
+    const selectedIndex = await this.selectBestElement(
+      distilledElements,
+      selectorConfig,
+      strategy
+    );
+
+    if (selectedIndex !== -1 && selectedIndex < elements.length) {
+      console.log(`✅ [ElementFinder] LLM selected element ${selectedIndex + 1}`);
+      const selectedElement = elements[selectedIndex];
+      if (selectedElement) {
+        const selector = await this.buildElementSelector(selectedElement);
+        
+        return {
+          element: selectedElement,
+          strategy: `${strategy}-llm-disambiguated`,
+          selector,
+          found: true,
+          confidence: 85, // High confidence due to LLM reasoning
+        };
+      }
+    }
+
+    console.log("❌ [ElementFinder] LLM disambiguation failed, using rule-based fallback");
+    
+    // Use rule-based selection as fallback instead of just picking the first element
+    const ruleBasedIndex = this.ruleBasedSelection(distilledElements, selectorConfig);
+    if (ruleBasedIndex >= 0 && ruleBasedIndex < elements.length) {
+      console.log(`🎯 [ElementFinder] Rule-based selection chose element ${ruleBasedIndex + 1}`);
+      const selectedElement = elements[ruleBasedIndex];
+      if (selectedElement) {
+        return {
+          element: selectedElement,
+          strategy: `${strategy}-rule-based`,
+          selector: await this.buildElementSelector(selectedElement),
+          found: true,
+          confidence: 70, // Medium confidence
+        };
+      }
+    }
+
+    // Only if everything fails, fall back to the first element
+    console.log("⚠️ [ElementFinder] All disambiguation methods failed, using first element as last resort");
+    const fallbackElement = elements[0];
+    if (fallbackElement) {
+      return {
+        element: fallbackElement,
+        strategy: `${strategy}-fallback-first`,
+        selector: await this.buildElementSelector(fallbackElement),
+        found: true,
+        confidence: 40, // Low confidence
+      };
+    }
+
+    // No valid elements found
+    return {
+      element: page.locator("not-found"),
+      strategy: "no-valid-elements",
+      selector: "none",
+      found: false,
+      confidence: 0,
+    };
+  }
+
+  /**
+   * Distill element information for LLM analysis
+   */
+  private async distillElementInformation(elements: Locator[]): Promise<Array<{
+    index: number;
+    textContent: string;
+    attributes: Record<string, string>;
+    context: {
+      tagName: string;
+      parentInfo: string;
+      siblingInfo: string;
+      position: { x: number; y: number };
+    };
+  }>> {
+    const distilled: Array<{
+      index: number;
+      textContent: string;
+      attributes: Record<string, string>;
+      context: {
+        tagName: string;
+        parentInfo: string;
+        siblingInfo: string;
+        position: { x: number; y: number };
+      };
+    }> = [];
+
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+      
+      if (!element) continue;
+
+      try {
+        // Extract key information
+        const textContent = (await element.textContent()) || '';
+        const tagName = (await element.evaluate('el => el.tagName.toLowerCase()')) as string;
+        
+        // Get relevant attributes
+        const attributes: Record<string, string> = {};
+        const attrNames = ['id', 'class', 'name', 'type', 'placeholder', 'aria-label', 'role', 'href', 'alt', 'value'];
+        
+        for (const attr of attrNames) {
+          const value = await element.getAttribute(attr);
+          if (value) attributes[attr] = value;
+        }
+
+        // Get context information
+        const parentInfo = (await element.evaluate('el => {' +
+          'const parent = el.parentElement;' +
+          'return parent ? `${parent.tagName.toLowerCase()}${parent.id ? "#" + parent.id : ""}${parent.className ? "." + parent.className.split(" ")[0] : ""}` : "none";' +
+        '}')) as string;
+
+        const siblingInfo = (await element.evaluate('el => {' +
+          'const siblings = Array.from(el.parentElement?.children || []);' +
+          'const index = siblings.indexOf(el);' +
+          'return `${index + 1} of ${siblings.length}`;' +
+        '}')) as string;
+
+        const position = (await element.boundingBox()) || { x: 0, y: 0, width: 0, height: 0 };
+
+        distilled.push({
+          index: i,
+          textContent: textContent.trim().substring(0, 100), // Limit text length
+          attributes,
+          context: {
+            tagName: tagName || 'unknown',
+            parentInfo: parentInfo || 'unknown',
+            siblingInfo: siblingInfo || 'unknown',
+            position: { x: Math.round(position.x), y: Math.round(position.y) },
+          }
+        });
+      } catch (error) {
+        // If we can't get info for an element, mark it as problematic
+        distilled.push({
+          index: i,
+          textContent: '',
+          attributes: {},
+          context: {
+            tagName: 'unknown',
+            parentInfo: 'unknown',
+            siblingInfo: 'unknown',
+            position: { x: 0, y: 0 },
+          }
+        });
+      }
+    }
+
+    return distilled;
+  }
+
+  /**
+   * Use LLM reasoning to select the best element
+   */
+  private async selectBestElement(
+    distilledElements: Array<{
+      index: number;
+      textContent: string;
+      attributes: Record<string, string>;
+      context: any;
+    }>,
+    selectorConfig: StructuredElementSelector,
+    strategy: string
+  ): Promise<number> {
+    // Create a structured prompt for the LLM
+    const prompt = this.buildDisambiguationPrompt(distilledElements, selectorConfig, strategy);
+    
+    console.log("\n🧠 [ElementFinder] LLM Disambiguation Prompt:");
+    console.log("▼".repeat(80));
+    console.log(prompt);
+    console.log("▼".repeat(80));
+
+    try {
+      // First try calling an actual LLM service if available
+      const llmResult = await this.callLLMService(prompt, distilledElements.length);
+      if (llmResult !== -1) {
+        console.log(`🤖 [ElementFinder] LLM service selected element ${llmResult + 1}`);
+        return llmResult;
+      }
+    } catch (error) {
+      console.log("❌ [ElementFinder] LLM service call failed:", error);
+    }
+
+    // Fallback to rule-based selection
+    console.log("🔄 [ElementFinder] Using rule-based selection as fallback");
+    return this.ruleBasedSelection(distilledElements, selectorConfig);
+  }
+
+  /**
+   * Call LLM service for element disambiguation
+   */
+  private async callLLMService(prompt: string, elementCount: number): Promise<number> {
+    try {
+      // This would integrate with your LLM service
+      // For now, we'll use a mock implementation that you can replace
+      
+      // Try to import LLM service if available
+      try {
+        const llmModule = await import('../LLM');
+        if (llmModule && 'llmService' in llmModule && llmModule.llmService) {
+          const response = await (llmModule.llmService as any).generateResponse(prompt, {
+            maxTokens: 50,
+            temperature: 0.1, // Low temperature for more deterministic results
+            systemPrompt: "You are an expert web automation assistant. Respond with only the number of the best element choice."
+          });
+
+          // Parse the response to get the element number
+          const match = response.match(/\b(\d+)\b/);
+          if (match) {
+            const selectedNumber = parseInt(match[1], 10);
+            if (selectedNumber >= 1 && selectedNumber <= elementCount) {
+              return selectedNumber - 1; // Convert to 0-based index
+            }
+          }
+        }
+      } catch (importError) {
+        console.log("📝 [ElementFinder] LLM service not available, using rule-based selection");
+      }
+      
+      return -1; // LLM service not available or invalid response
+    } catch (error) {
+      console.log("🚫 [ElementFinder] LLM service error:", error);
+      return -1;
+    }
+  }
+
+  /**
+   * Build a structured prompt for LLM disambiguation
+   */
+  private buildDisambiguationPrompt(
+    distilledElements: Array<any>,
+    selectorConfig: StructuredElementSelector,
+    strategy: string
+  ): string {
+    const targetDescription = JSON.stringify(selectorConfig.identifier, null, 2);
+    
+    let prompt = `I found ${distilledElements.length} elements that match the selector for a ${selectorConfig.type} element. `;
+    prompt += `The target element should match: ${targetDescription}\n\n`;
+    prompt += `Please analyze each option and select the most appropriate element:\n\n`;
+
+    distilledElements.forEach((element, index) => {
+      prompt += `Element ${index + 1}:\n`;
+      prompt += `  Text Content: "${element.textContent}"\n`;
+      prompt += `  Tag: ${element.context.tagName}\n`;
+      prompt += `  Attributes: ${JSON.stringify(element.attributes, null, 4)}\n`;
+      prompt += `  Parent: ${element.context.parentInfo}\n`;
+      prompt += `  Position: ${element.context.siblingInfo}\n`;
+      prompt += `  Screen Position: (${element.context.position.x}, ${element.context.position.y})\n\n`;
+    });
+
+    prompt += `Based on the target criteria and context, which element (1-${distilledElements.length}) is the most appropriate? `;
+    prompt += `Consider:\n`;
+    prompt += `1. Text content relevance\n`;
+    prompt += `2. Attribute matching\n`;
+    prompt += `3. Contextual appropriateness (parent elements, position)\n`;
+    prompt += `4. Typical UI patterns\n\n`;
+    prompt += `Respond with only the number of the best element (1-${distilledElements.length}).`;
+
+    return prompt;
+  }
+
+  /**
+   * Rule-based fallback selection when LLM is unavailable
+   */
+  private ruleBasedSelection(
+    distilledElements: Array<any>,
+    selectorConfig: StructuredElementSelector
+  ): number {
+    const identifier = selectorConfig.identifier;
+    let bestScore = -1;
+    let bestIndex = 0;
+
+    distilledElements.forEach((element, index) => {
+      let score = 0;
+
+      // Score based on text content match
+      if (identifier.text && element.textContent.includes(identifier.text)) {
+        score += 10;
+        
+        // Special handling for common button scenarios
+        if (selectorConfig.type === 'button') {
+          const text = element.textContent.toLowerCase();
+          const targetText = identifier.text.toLowerCase();
+          
+          // Heavily favor exact matches for critical actions
+          if (text === targetText) {
+            score += 20;
+          }
+          
+          // Prioritize positive actions over negative ones
+          if (targetText.includes('submit') && text.includes('submit')) {
+            score += 15; // Strong preference for submit buttons
+          } else if (targetText.includes('submit') && (text.includes('exit') || text.includes('cancel') || text.includes('close'))) {
+            score -= 10; // Penalize negative actions when looking for submit
+          }
+          
+          // Similar logic for other action types
+          if (targetText.includes('save') && text.includes('save')) {
+            score += 15;
+          } else if (targetText.includes('save') && (text.includes('delete') || text.includes('cancel'))) {
+            score -= 10;
+          }
+        }
+      }
+      
+      if (identifier.textContains && element.textContent.includes(identifier.textContains)) {
+        score += 8;
+      }
+
+      // Score based on attribute matches
+      if (identifier.id && element.attributes.id === identifier.id) {
+        score += 15;
+      }
+      if (identifier.name && element.attributes.name === identifier.name) {
+        score += 12;
+      }
+      if (identifier.className && element.attributes.class?.includes(identifier.className)) {
+        score += 8;
+      }
+      if (identifier.classContains && element.attributes.class?.includes(identifier.classContains)) {
+        score += 6;
+      }
+      if (identifier.testId && element.attributes['data-testid'] === identifier.testId) {
+        score += 15;
+      }
+      if (identifier.placeholder && element.attributes.placeholder === identifier.placeholder) {
+        score += 10;
+      }
+      if (identifier.ariaLabel && element.attributes['aria-label'] === identifier.ariaLabel) {
+        score += 10;
+      }
+
+      // Additional button-specific scoring
+      if (selectorConfig.type === 'button' && element.attributes.type) {
+        const buttonType = element.attributes.type.toLowerCase();
+        if (buttonType === 'submit' && identifier.text?.toLowerCase().includes('submit')) {
+          score += 12; // Favor submit type buttons when looking for submit
+        }
+      }
+
+      // Context-based scoring
+      if (element.context.parentInfo) {
+        const parentInfo = element.context.parentInfo.toLowerCase();
+        // Prefer buttons inside forms when looking for submit
+        if (parentInfo.includes('form') && identifier.text?.toLowerCase().includes('submit')) {
+          score += 8;
+        }
+      }
+
+      // Prefer elements that are visible and well-positioned
+      if (element.context.position.x > 0 && element.context.position.y > 0) {
+        score += 2;
+      }
+
+      // Prefer elements with more specific attributes
+      score += Object.keys(element.attributes).length * 0.5;
+
+      console.log(`🔍 [ElementFinder] Element ${index + 1} ("${element.textContent}") score: ${score}`);
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    console.log(`🎯 [ElementFinder] Rule-based selection: Element ${bestIndex + 1} (score: ${bestScore})`);
+    return bestIndex;
+  }
+
+  /**
+   * Build a selector string from a located element for reporting
+   */
+  private async buildElementSelector(element: Locator): Promise<string> {
+    try {
+      const id = await element.getAttribute('id');
+      if (id) return `#${id}`;
+
+      const className = await element.getAttribute('class');
+      if (className) {
+        const firstClass = className.split(' ')[0];
+        if (firstClass) return `.${firstClass}`;
+      }
+
+      const name = await element.getAttribute('name');
+      if (name) return `[name="${name}"]`;
+
+      const testId = await element.getAttribute('data-testid');
+      if (testId) return `[data-testid="${testId}"]`;
+
+      const tagName = await element.evaluate('el => el.tagName.toLowerCase()') as string;
+      return tagName;
+    } catch (error) {
+      return 'unknown';
+    }
   }
 }
 
