@@ -322,9 +322,9 @@ export class ElementFinder {
       if (config.options?.visible !== false) {
         // For input elements, be more lenient with visibility checks
         if (config.type === "input") {
-          await element.waitFor({ state: "attached", timeout: 3000 });
+          await element.waitFor({ state: "attached", timeout: 6000 });
         } else {
-          await element.waitFor({ state: "visible", timeout: 3000 });
+          await element.waitFor({ state: "visible", timeout: 6000 });
         }
       }
 

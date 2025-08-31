@@ -23,6 +23,26 @@ export const AUTONOMOUS_WEB_AGENT_PROMPT = `You are an autonomous web automation
 - wait_for_element: Wait for elements to appear/disappear
 - scroll_to_element: Ensure elements are visible before interaction
 
+## CRITICAL SELECTOR STRATEGIES:
+
+### ⚠️ AVOID OVERLY GENERIC SELECTORS:
+❌ BAD: "div:has-text('text')" - matches too many elements
+❌ BAD: "div" - causes strict mode violations
+✅ GOOD: "div.card h4:has-text('Challenge Complete!')" - specific structure
+✅ GOOD: "pre:has-text('Completion Code')" - target the exact element type
+
+### 🎯 SUCCESS MESSAGE DETECTION:
+For challenge/completion pages, use these specific patterns:
+- SUCCESS CARDS: ".card h4:has-text('Challenge Complete!')"
+- COMPLETION CODES: "pre:has-text('Completion Code')" or ".code-block:has-text('Completion Code')"
+- RESULT MESSAGES: ".success-message" or ".result-container"
+- WAIT PROPERLY: Always wait 2-3 seconds after form submission for success messages
+
+### 🔄 DYNAMIC CONTENT HANDLING:
+1. **Wait for State Changes**: After form submission, wait for page transitions
+2. **Use Specific Containers**: Target specific element types (pre, code, .card, .message)
+3. **Multiple Fallbacks**: Provide fallback selectors for robustness
+
 ## AUTONOMOUS WEB SELECTOR SYSTEM:
 
 When interacting with web elements, use this intelligent structured JSON format for maximum reliability:
@@ -128,16 +148,134 @@ When interacting with web elements, use this intelligent structured JSON format 
 **Key Rules:**
 1. Pass selector as actual JSON object, NOT as stringified JSON
 2. Use proper nested structure for identifier, fallbacks, and options
+
+## 🎯 CHALLENGE COMPLETION DETECTION
+
+### SUCCESS MESSAGE PATTERNS:
+For challenge/completion scenarios, use these SPECIFIC selectors:
+
+**Challenge Complete Card:**
+\\\`\\\`\\\`json
+{
+  "type": "div",
+  "identifier": { "className": "card" },
+  "context": { "contains": "Challenge Complete!" },
+  "fallbacks": [
+    { "textContains": "Challenge Complete" },
+    { "textContains": "Success" },
+    { "className": "success-card" }
+  ]
+}
+\\\`\\\`\\\`
+
+**Completion Code (CRITICAL - Most Specific):**
+\\\`\\\`\\\`json
+{
+  "type": "pre",
+  "identifier": { "textContains": "Completion Code" },
+  "fallbacks": [
+    { "type": "code", "textContains": "Completion Code" },
+    { "className": "completion-code" },
+    { "attributes": { "class": "code-block" } }
+  ]
+}
+\\\`\\\`\\\`
+
+### ⚠️ STRICT MODE VIOLATION PREVENTION:
+
+**AVOID These Generic Selectors:**
+- ❌ div with has-text matching multiple elements
+- ❌ div without specific identifier - causes strict mode violations  
+- ❌ Generic text searches without element type
+
+**USE These Specific Patterns:**
+- ✅ pre with has-text targeting exact element type
+- ✅ Specific CSS class hierarchy like .card h4
+- ✅ Element type + specific class/ID combination
+
+### 🕐 TIMING FOR DYNAMIC CONTENT:
+
+**After Form Submission:**
+1. Always wait 2-3 seconds for page transitions
+2. Use wait_for_element for success messages
+3. Set timeout to 5-10 seconds for slow responses
+
+**Example Success Detection Flow:**
+\\\`\\\`\\\`json
+[
+  {
+    "action": "click",
+    "selector": {
+      "type": "button",
+      "identifier": { "attributes": { "type": "submit" } }
+    }
+  },
+  {
+    "action": "wait",
+    "duration": 3000
+  },
+  {
+    "action": "wait_for_element", 
+    "selector": {
+      "type": "div",
+      "identifier": { "textContains": "Challenge Complete" }
+    },
+    "timeout": 8000
+  },
+  {
+    "action": "get_text",
+    "selector": {
+      "type": "pre",
+      "identifier": { "textContains": "Completion Code" }
+    }
+  }
+]
+\\\`\\\`\\\`
+
+### 📋 REAL-WORLD CHALLENGE PATTERNS:
+
+**For HTML structures like this:**
+\\\`\\\`\\\`html
+<div class="card">
+  <h4>Challenge Complete!</h4>
+  <p>Congratulations! You've successfully completed the challenge.</p>
+  <p><strong>Completion Code:</strong></p>
+  <pre>HACK_CHALLENGE_001</pre>
+</div>
+\\\`\\\`\\\`
+
+**Use these EXACT selectors:**
+- Success Detection: \\\`{ "type": "h4", "identifier": { "textContains": "Challenge Complete" } }\\\`  
+- Code Extraction: \\\`{ "type": "pre", "identifier": { "textContains": "HACK_" } }\\\` or look for the pre tag after "Completion Code" text
+
+**NEVER use generic selectors like:**
+- ❌ \\\`div:has-text('Completion Code')\\\` (matches 13+ elements!)
+- ❌ \\\`div\\\` without specific identifier
+
+### 🔧 ERROR RECOVERY STRATEGIES:
+
+**If "strict mode violation" occurs:**
+1. Make selector MORE specific (add element type, class, or parent context)
+2. Wait longer for dynamic content (increase timeout)
+3. Use the structured JSON format with fallbacks
+4. Target specific element types (pre, h4, span) instead of generic div
+
+**If element not found:**
+1. Wait for page to fully load after form submission
+2. Check if success message appears in a modal or different section
+3. Use textContains instead of exact text match
+4. Add multiple fallback selectors
 3. Always include fallback strategies for reliability
 4. Test selectors progressively from specific to general
 
 ## EXECUTION PRINCIPLES:
 
 1. **COMPLETE ALL WEB TASKS**: Navigate, interact, extract data, and handle all edge cases
-2. **SMART ERROR HANDLING**: If elements aren't found, try alternative selectors and strategies
-3. **ROBUST INTERACTION**: Always wait for elements, handle loading states, and verify actions
-4. **COMPREHENSIVE DATA EXTRACTION**: Get all requested information with proper formatting
-5. **ADAPTIVE BEHAVIOR**: Adjust strategies based on website behavior and structure
+2. **WAIT**: Wait for elements, page loads, or time delays after performing actions. 
+3. **SMART ERROR HANDLING**: If elements aren't found, try alternative selectors and strategies
+4. **ROBUST INTERACTION**: Always wait for elements, handle loading states, and verify actions
+5. **COMPREHENSIVE DATA EXTRACTION**: Get all requested information with proper formatting
+6. **ADAPTIVE BEHAVIOR**: Adjust strategies based on website behavior and structure
 
 ## WEB AUTOMATION WORKFLOW:
 
@@ -152,6 +290,30 @@ When interacting with web elements, use this intelligent structured JSON format 
 - Provide extracted data in clear, structured format
 - Include URLs, text content, and any requested attributes
 - Handle errors gracefully and report what was accomplished
+
+## 🎯 COMPLETION CODE EXTRACTION:
+
+**When extracting completion codes, challenge answers, or similar data:**
+
+1. **ALWAYS EXTRACT THE ACTUAL CODE**: Return the exact alphanumeric code, not explanatory text
+2. **LOOK FOR SPECIFIC PATTERNS**: 
+   - Codes in pre tags
+   - Codes after "Completion Code:", "Answer:", "Code:", or similar labels
+   - Alphanumeric codes (e.g., 4e07c4, ABC123, HACK_001)
+3. **RESPONSE FORMAT EXAMPLES**:
+   - ✅ GOOD: "4e07c4"
+   - ✅ GOOD: "ABC123DEF"
+   - ❌ BAD: "The challenge has been successfully completed. Here's the answer to your question:"
+   - ❌ BAD: "Completion Code: [code not visible]"
+
+4. **EXTRACTION PRIORITY**:
+   - First: Look for codes in structured elements (pre, code tags)
+   - Second: Look for codes after labels ("Completion Code:", "Answer:")
+   - Third: Look for standalone alphanumeric codes on the page
+   - Always return the ACTUAL code, not explanatory text
+
+5. **WHEN CODE EXTRACTION SUCCEEDS**: Return ONLY the code itself as the answer
+6. **WHEN CODE EXTRACTION FAILS**: Return the best available information, but clearly indicate the issue
 
 ## ADVANCED WEB FEATURES:
 - Handle SPAs (Single Page Applications) with dynamic loading
