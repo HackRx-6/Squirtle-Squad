@@ -25,6 +25,14 @@ export const AUTONOMOUS_WEB_AGENT_PROMPT = `You are an autonomous web automation
 
 ## CRITICAL SELECTOR STRATEGIES:
 
+### ✅ SELECTOR HIERARCHY OF PREFERENCE:
+1. **Structured JSON Selector (Highest Priority):** ALWAYS prefer the full JSON object format when an action involves a form, requires high precision, or might have ambiguous targets (e.g., multiple "Submit" buttons). This is the most reliable method.
+2. **Specific String Selector (Good Alternative):** If the target is simple and unique, you may use a precise CSS or Playwright text selector string.
+   - ✅ GOOD: \`"button:has-text('Submit Query')"\`
+   - ✅ GOOD: \`".btn.primary"\`
+   - ✅ GOOD: \`"input[name='email']"\`
+3. **Generic String Selector (Avoid):** NEVER use overly generic selectors like \`"button"\` or \`"div"\` if more than one exists on the page. This is the most common cause of errors.
+
 ### ⚠️ AVOID OVERLY GENERIC SELECTORS:
 ❌ BAD: "div:has-text('text')" - matches too many elements
 ❌ BAD: "div" - causes strict mode violations
@@ -130,24 +138,30 @@ When interacting with web elements, use this intelligent structured JSON format 
 
 ## CRITICAL: SELECTOR FORMAT RULES
 
-🚨 **NEVER STRINGIFY JSON SELECTORS** 🚨
+You have two valid options for the "selector" parameter:
+1. A valid JSON object (Preferred).
+2. A single CSS selector string.
 
-❌ **WRONG** - DO NOT do this:
-\`\`\`
-"selector": "{\\"type\\":\\"input\\",\\"identifier\\":{\\"placeholder\\":\\"Enter the hidden text\\"}}"
-\`\`\`
+🚨 **NEVER MIX THESE FORMATS** 🚨
 
-✅ **CORRECT** - Always do this:
-\`\`\`
-"selector": {
+❌ **WRONG** - Do not stringify a JSON object:
+\`"selector": "{\\"type\\":\\"input\\",\\"identifier\\":{\\"placeholder\\":\\"Enter the hidden text\\"}}"\`
+
+❌ **WRONG** - Do not provide a malformed string that looks like an object:
+\`"selector": "type: 'button', identifier: { 'text': 'Start Challenge' }"\`
+
+✅ **CORRECT** - A real JSON object:
+\`"selector": {
   "type": "input",
   "identifier": { "placeholder": "Enter the hidden text" }
-}
-\`\`\`
+\`
+
+✅ **CORRECT** - A simple, specific CSS string:
+\`"selector": "button.primary:has-text('Start Challenge')"\`
 
 **Key Rules:**
-1. Pass selector as actual JSON object, NOT as stringified JSON
-2. Use proper nested structure for identifier, fallbacks, and options
+1. Pass the structured selector as a **complete and valid JSON object**, NOT as a string.
+2. If not using JSON, pass a **single, valid CSS selector string**.
 
 ## 🎯 CHALLENGE COMPLETION DETECTION
 
@@ -196,9 +210,9 @@ For challenge/completion scenarios, use these SPECIFIC selectors:
 ### 🕐 TIMING FOR DYNAMIC CONTENT:
 
 **After Form Submission:**
-1. Always wait 2-3 seconds for page transitions
-2. Use wait_for_element for success messages
-3. Set timeout to 5-10 seconds for slow responses
+1. **Prefer Event-Based Waits:** Instead of fixed delays, it is ALWAYS better to wait for a specific element to appear or disappear. Use \`wait_for_element\` to confirm that the page has changed as you expect.
+2. **Use Fixed Waits Sparingly:** Only use \`wait\` with a duration (e.g., 2000-3000ms) if the page transition is slow and there is no reliable element to wait for.
+3. **Set a Generous Timeout:** When using \`wait_for_element\`, set the \`timeout\` option to 5-10 seconds to handle slow network responses.
 
 **Example Success Detection Flow:**
 \\\`\\\`\\\`json

@@ -126,14 +126,17 @@ export class ToolCallingService {
   }
 
   private determinePromptType(
-    questions: string[]
+    questions: string[],
+    documents?: string
   ): "generic" | "intelligent" | "autonomous" | "web" {
     console.log(
-      "\n🤔 [ToolCallingService] ANALYZING QUESTIONS TO DETERMINE PROMPT TYPE:"
+      "\n🤔 [ToolCallingService] ANALYZING QUESTIONS AND DOCUMENTS TO DETERMINE PROMPT TYPE:"
     );
     console.log("◈".repeat(80));
 
     const allQuestionsText = questions.join(" ").toLowerCase();
+    const allDocumentsText = documents ? documents.toLowerCase() : "";
+    const combinedText = `${allQuestionsText} ${allDocumentsText}`;
 
     // Check for autonomous coding indicators
     const codingKeywords = [
@@ -147,6 +150,7 @@ export class ToolCallingService {
       "commit",
       "push",
       "repository",
+      "repo",
       "hackathon",
       "challenge",
       "python",
@@ -160,10 +164,16 @@ export class ToolCallingService {
       "execute",
       "run code",
       "compile",
+      "hackrx",
+      "team",
+      "folder",
+      "generate",
+      "llm",
+      "intervention",
     ];
 
     const hasCodeKeywords = codingKeywords.some((keyword) =>
-      allQuestionsText.includes(keyword)
+      combinedText.includes(keyword)
     );
 
     // Check for web automation indicators
@@ -198,14 +208,19 @@ export class ToolCallingService {
     ];
 
     const hasWebKeywords = webKeywords.some((keyword) =>
-      allQuestionsText.includes(keyword)
+      combinedText.includes(keyword)
     );
 
     console.log("🔍 Analysis Results:");
     console.log("📝 Questions Count:", questions.length);
-    console.log("🔧 Has Coding Keywords:", hasCodeKeywords);
+    console.log("� Documents Length:", documents ? documents.length : 0);
+    console.log("�🔧 Has Coding Keywords:", hasCodeKeywords);
     console.log("🌐 Has Web Keywords:", hasWebKeywords);
     console.log("📋 Sample Question:", questions[0]?.substring(0, 100) + "...");
+    console.log(
+      "📄 Documents Preview:",
+      documents ? documents.substring(0, 100) + "..." : "N/A"
+    );
 
     let promptType: "generic" | "intelligent" | "autonomous" | "web";
 
@@ -214,10 +229,18 @@ export class ToolCallingService {
       console.log("🎯 Selected: WEB (web automation/browser tasks detected)");
     } else if (
       hasCodeKeywords &&
-      (allQuestionsText.includes("git") || allQuestionsText.includes("commit"))
+      (combinedText.includes("git") ||
+        combinedText.includes("commit") ||
+        combinedText.includes("push") ||
+        combinedText.includes("repo") ||
+        combinedText.includes("repository") ||
+        combinedText.includes("hackathon") ||
+        combinedText.includes("challenge"))
     ) {
       promptType = "autonomous";
-      console.log("🎯 Selected: AUTONOMOUS (coding + git operations detected)");
+      console.log(
+        "🎯 Selected: AUTONOMOUS (coding + git/repo operations detected)"
+      );
     } else if (questions.length <= 2 && hasCodeKeywords) {
       promptType = "intelligent";
       console.log("🎯 Selected: INTELLIGENT (simple coding task)");
@@ -805,8 +828,11 @@ ${importantInstructions}Please help me with these questions/tasks. Use the appro
       // Create prompts
       this.logger.debug("Creating prompts for LLM", { sessionId });
 
-      // Determine the best prompt type based on questions
-      const promptType = this.determinePromptType(request.questions);
+      // Determine the best prompt type based on questions and documents
+      const promptType = this.determinePromptType(
+        request.questions,
+        request.documents
+      );
       const rawSystemPrompt = this.createSystemPrompt(promptType);
 
       const rawUserMessage = this.createUserMessage(
