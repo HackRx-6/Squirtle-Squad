@@ -156,7 +156,7 @@ export class PlaywrightService {
           const hasNavigateAction = request.actions.some(
             (action) => action.type === "navigate"
           );
-          if (!hasNavigateAction) {
+          if (!hasNavigateAction && request.url) {
             this.logger.info("Navigating to initial URL (not in actions)", {
               sessionId,
               url: request.url,
@@ -169,7 +169,7 @@ export class PlaywrightService {
           } else {
             this.logger.info(
               "Navigation action found in sequence, skipping initial navigation",
-              { sessionId }
+              { sessionId, urlProvided: !!request.url }
             );
           }
 
