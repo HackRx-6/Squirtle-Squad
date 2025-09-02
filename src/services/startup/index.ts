@@ -38,84 +38,75 @@ export class StartupService {
       error?: string;
     }[] = [];
 
-    // Skip Playwright initialization during startup in production/Docker
-    // It will be initialized on-demand when first needed
-    const skipPlaywrightInit =
-      process.env.NODE_ENV === "production" ||
-      process.env.DOCKER_ENV === "true";
+    // Always try to initialize Playwright at startup for better performance
+    // Will gracefully handle deployment issues and fall back to on-demand initialization
 
-    if (!skipPlaywrightInit) {
-      // Initialize Playwright Service only in development
-      try {
-        this.logger.info("Initializing Playwright service");
-        console.log("🎭 Initializing Playwright browser...");
+    // Initialize Playwright Service
+    try {
+      this.logger.info("Initializing Playwright service", {
+        environment: process.env.NODE_ENV,
+        dockerEnv: process.env.DOCKER_ENV,
+      });
+      console.log("🎭 Initializing Playwright browser...");
 
-        const playwrightStartTime = Date.now();
-        await playwrightService.initializeOnStartup();
-        const playwrightTime = Date.now() - playwrightStartTime;
+      const playwrightStartTime = Date.now();
+      await playwrightService.initializeOnStartup();
+      const playwrightTime = Date.now() - playwrightStartTime;
+
+      initResults.push({
+        service: "PlaywrightService",
+        success: true,
+        timeMs: playwrightTime,
+      });
+
+      this.logger.info("Playwright service initialized successfully", {
+        initTimeMs: playwrightTime,
+      });
+    } catch (error: any) {
+      // Handle specific bundling errors that are non-critical
+      if (
+        error.message?.includes("DOMMatrix") ||
+        error.message?.includes("Cannot replace module namespace") ||
+        error.message?.includes("configurable attribute") ||
+        error.message?.includes("defineProperty")
+      ) {
+        console.warn(
+          "⚠️  Non-critical bundling warning detected - Playwright will work on-demand"
+        );
+        this.logger.warn("Non-critical Playwright bundling warning", {
+          error: error.message,
+          note: "This is expected in bundled environments",
+        });
 
         initResults.push({
           service: "PlaywrightService",
           success: true,
-          timeMs: playwrightTime,
+          timeMs: 0,
+          error: "Bundling warning (non-critical)",
+        });
+      } else {
+        const errorMsg = `Playwright service initialization failed: ${error.message}`;
+        this.logger.error(errorMsg, {
+          error: error.message,
+          stack: error.stack,
         });
 
-        this.logger.info("Playwright service initialized successfully", {
-          initTimeMs: playwrightTime,
+        initResults.push({
+          service: "PlaywrightService",
+          success: false,
+          error: error.message,
         });
-      } catch (error: any) {
-        // Handle specific bundling errors that are non-critical
-        if (
-          error.message?.includes("DOMMatrix") ||
-          error.message?.includes("Cannot replace module namespace") ||
-          error.message?.includes("configurable attribute") ||
-          error.message?.includes("defineProperty")
-        ) {
-          console.warn(
-            "⚠️  Non-critical bundling warning detected - Playwright will work on-demand"
-          );
-          this.logger.warn("Non-critical Playwright bundling warning", {
-            error: error.message,
-            note: "This is expected in bundled environments",
-          });
 
-          initResults.push({
-            service: "PlaywrightService",
-            success: true,
-            timeMs: 0,
-            error: "Bundling warning (non-critical)",
-          });
-        } else {
-          const errorMsg = `Playwright service initialization failed: ${error.message}`;
-          this.logger.error(errorMsg, {
-            error: error.message,
-            stack: error.stack,
-          });
+        // Log warning but don't fail startup - service will work lazily
+        console.warn(
+          "⚠️  Playwright initialization failed, will initialize on first use"
+        );
 
-          initResults.push({
-            service: "PlaywrightService",
-            success: false,
-            error: error.message,
-          });
-
-          // Log warning but don't fail startup - service will work lazily
-          console.warn(
-            "⚠️  Playwright initialization failed, will initialize on first use"
-          );
-        }
+        // Start background initialization to try again
+        console.log("🔄 Starting background Playwright initialization...");
+        this.startBackgroundPlaywrightInitialization();
       }
-    } else {
-      console.log(
-        "🎭 Playwright initialization skipped (production mode - will initialize on-demand)"
-      );
-      initResults.push({
-        service: "PlaywrightService",
-        success: true,
-        timeMs: 0,
-      });
-    }
-
-    // Add more service initializations here as needed
+    } // Add more service initializations here as needed
     // Example:
     // await this.initializeOtherService();
 
@@ -146,6 +137,64 @@ export class StartupService {
   }
 
   /**
+   * Start background Playwright initialization with retry mechanism
+   */
+  private startBackgroundPlaywrightInitialization(): void {
+    const maxRetries = 3;
+    const retryDelay = 5000; // 5 seconds
+
+    const attemptInitialization = async (attempt: number) => {
+      try {
+        this.logger.info(
+          `Background Playwright initialization attempt ${attempt}/${maxRetries}`
+        );
+        await playwrightService.initializeOnStartup();
+
+        console.log("✅ Background Playwright initialization successful");
+        this.logger.info(
+          "Background Playwright initialization completed successfully",
+          {
+            attempt,
+            ...playwrightService.getStatus(),
+          }
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Background Playwright initialization attempt ${attempt} failed`,
+          {
+            error: error.message,
+            attempt,
+            maxRetries,
+          }
+        );
+
+        if (attempt < maxRetries) {
+          console.log(
+            `🔄 Retrying background Playwright initialization in ${
+              retryDelay / 1000
+            }s (attempt ${attempt + 1}/${maxRetries})`
+          );
+          setTimeout(() => attemptInitialization(attempt + 1), retryDelay);
+        } else {
+          console.warn(
+            "⚠️  Background Playwright initialization failed after all retries - will remain on-demand"
+          );
+          this.logger.error(
+            "Background Playwright initialization failed after all retries",
+            {
+              maxRetries,
+              finalError: error.message,
+            }
+          );
+        }
+      }
+    };
+
+    // Start first attempt after a short delay to not interfere with server startup
+    setTimeout(() => attemptInitialization(1), 2000);
+  }
+
+  /**
    * Get initialization status
    */
   public getInitializationStatus(): {
@@ -163,9 +212,7 @@ export class StartupService {
    */
   private isPlaywrightReady(): boolean {
     try {
-      // Access private properties through any to check readiness
-      const service = playwrightService as any;
-      return !!(service.browser && service.context);
+      return playwrightService.isReady();
     } catch {
       return false;
     }

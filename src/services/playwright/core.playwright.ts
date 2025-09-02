@@ -605,6 +605,25 @@ export class PlaywrightService {
     return this.sessionManager.getSessionStats();
   }
 
+  /**
+   * Check if the Playwright service is ready (browser and context initialized)
+   */
+  public isReady(): boolean {
+    return !!(
+      this.browserManager.getBrowser() && this.browserManager.getContext()
+    );
+  }
+
+  /**
+   * Get service status information
+   */
+  public getStatus(): { browserReady: boolean; contextReady: boolean } {
+    return {
+      browserReady: !!this.browserManager.getBrowser(),
+      contextReady: !!this.browserManager.getContext(),
+    };
+  }
+
   async cleanup(): Promise<void> {
     this.logger.info("Starting PlaywrightService cleanup");
 
