@@ -79,7 +79,8 @@ export const runWithToolsIfRequested = async (
 
   // Determine tool choice strategy
   const toolChoice = options?.toolChoice || "auto";
-  const maxLoops = options?.maxToolLoops ?? 6; // Increased for better tool usage
+  const appConfig = AppConfigService.getInstance();
+  const maxLoops = options?.maxToolLoops ?? appConfig.getMaxToolLoops();
 
   console.log("\n🧰 [Orchestration] TOOL-CALLING SESSION STARTED:");
   console.log("◈".repeat(80));

@@ -378,12 +378,12 @@ ${importantInstructions}Please help me with these questions/tasks. Use the appro
   private extractMeaningfulAnswer(response: string): string {
     // Simply return the trimmed response - no aggressive regex patterns
     const trimmedResponse = response.trim();
-    
+
     this.logger.debug("Preserving full LLM response", {
       responseLength: trimmedResponse.length,
-      responsePreview: trimmedResponse.substring(0, 200) + "..."
+      responsePreview: trimmedResponse.substring(0, 200) + "...",
     });
-    
+
     return trimmedResponse;
   }
 
@@ -733,7 +733,7 @@ ${importantInstructions}Please help me with these questions/tasks. Use the appro
       try {
         this.logger.info("Starting LLM processing with tools", {
           sessionId,
-          maxToolLoops: 10,
+          maxToolLoops: AppConfigService.getInstance().getMaxToolLoops(),
         });
 
         const llmStartTime = Date.now();

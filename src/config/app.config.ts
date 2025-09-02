@@ -67,6 +67,7 @@ export class AppConfigService {
       },
       toolCalls: {
         enabled: process.env.TOOLCALLS_ENABLED !== "false", // Simple boolean toggle
+        maxLoops: 8, // Maximum number of tool call loops
         advanced: {
           maxUrlsPerQuery: parseInt(
             process.env.TOOLCALLS_MAX_URLS_PER_QUERY || "2"
@@ -177,6 +178,19 @@ export class AppConfigService {
 
   public isToolsEnabled(): boolean {
     return this.qaConfig.toolCalls?.enabled ?? false;
+  }
+
+  public getMaxToolLoops(): number {
+    return this.qaConfig.toolCalls?.maxLoops ?? 6;
+  }
+
+  public setMaxToolLoops(maxLoops: number): void {
+    if (!this.qaConfig.toolCalls) {
+      this.qaConfig.toolCalls = { enabled: true, maxLoops };
+    } else {
+      this.qaConfig.toolCalls.maxLoops = maxLoops;
+    }
+    console.log(`🔄 Max tool loops updated to: ${maxLoops}`);
   }
 
   /**
