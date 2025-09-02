@@ -180,13 +180,16 @@ export class ElementFinder {
     page: Page,
     selectorConfig: StructuredElementSelector
   ): Promise<ElementFindResult> {
-    const timeout = selectorConfig.options?.timeout || 10000;
-
     this.logger.info("Finding element with structured selector", {
       type: selectorConfig.type,
       identifier: selectorConfig.identifier,
       context: selectorConfig.context,
     });
+
+    // // Set page-level timeout from config if provided
+    // if (selectorConfig.options?.timeout) {
+    //   page.setDefaultTimeout(selectorConfig.options.timeout);
+    // }
 
     console.log("\n🔍 [ElementFinder] FINDING ELEMENT:");
     console.log("▼".repeat(60));
@@ -200,7 +203,7 @@ export class ElementFinder {
       selectorConfig.fallbacks?.length || 0
     );
     console.log("🌐 Context:", JSON.stringify(selectorConfig.context, null, 2));
-    console.log("⏱️ Timeout:", timeout + "ms");
+    console.log("⚡ Using Playwright's Auto-Waiting (no manual timeouts)");
     console.log("📋 Full Selector Config:");
     console.log(JSON.stringify(selectorConfig, null, 2));
     console.log("▼".repeat(60));
@@ -253,7 +256,7 @@ export class ElementFinder {
       }
     }
 
-    // Final attempt with relaxed matching
+    // Try relaxed matching as a last resort
     console.log("\n🔍 [ElementFinder] TRYING RELAXED MATCHING (last resort):");
     const relaxedResult = await this.tryRelaxedMatching(page, selectorConfig);
     if (relaxedResult.found) {
@@ -328,7 +331,7 @@ export class ElementFinder {
   }
 
   /**
-   * Try a specific identifier strategy
+   * Try a specific identifier strategy using Playwright's smart waiting
    */
   private async trySelector(
     page: Page,
@@ -351,7 +354,7 @@ export class ElementFinder {
       const elementCount = await element.count();
 
       if (elementCount > 1) {
-        console.log(`\n� [ElementFinder] MULTIPLE ELEMENTS DETECTED!`);
+        console.log(`\n⚠ [ElementFinder] MULTIPLE ELEMENTS DETECTED!`);
         console.log(`🔍 Found ${elementCount} elements matching: ${selector}`);
         console.log(
           `🎯 Target: ${config.type} with "${JSON.stringify(
@@ -389,28 +392,16 @@ export class ElementFinder {
         );
       }
 
-      // Single element found - proceed with normal validation
+      // Single element found - use Playwright's auto-waiting
       if (elementCount === 0) {
         throw new Error("No elements found");
       }
 
-      // Apply additional filters if specified
-      if (config.options?.visible !== false) {
-        // For input elements, be more lenient with visibility checks
-        if (config.type === "input") {
-          await element.waitFor({ state: "attached", timeout: 6000 });
-        } else {
-          await element.waitFor({ state: "visible", timeout: 6000 });
-        }
-      }
+      // Use Playwright's intelligent auto-waiting
+      await this.waitForElementReady(element, config);
 
-      if (config.options?.enabled !== false && config.type === "input") {
-        await element.waitFor({ state: "attached", timeout: 1000 });
-        const isEnabled = await element.isEnabled().catch(() => true);
-        if (!isEnabled) {
-          throw new Error("Element is disabled");
-        }
-      }
+      // Validate element is in expected state
+      await this.validateElementState(element, config);
 
       this.logger.info(`Single element found using ${strategyName} strategy`, {
         selector,
@@ -450,13 +441,16 @@ export class ElementFinder {
   private buildSelector(type: string, identifier: any, context?: any): string {
     this.logger.debug("Building selector", { type, identifier, context });
     console.log("DEBUG buildSelector:", { type, identifier, context });
-    
+
     // Handle raw selectors first - they should be used as-is without modification
     if (identifier.rawSelector) {
-      console.log("🎯 Using raw CSS selector directly:", identifier.rawSelector);
+      console.log(
+        "🎯 Using raw CSS selector directly:",
+        identifier.rawSelector
+      );
       return identifier.rawSelector;
     }
-    
+
     let selector = "";
 
     // Start with element type if specified
@@ -612,7 +606,8 @@ export class ElementFinder {
     for (const strategy of relaxedStrategies) {
       try {
         const element = page.locator(strategy);
-        await element.first().waitFor({ state: "visible", timeout: 2000 });
+        // Use Playwright's auto-waiting instead of hardcoded timeout
+        await element.first().waitFor({ state: "visible" });
 
         return {
           element: element.first(),
@@ -1391,6 +1386,68 @@ export class ElementFinder {
     } catch (error) {
       return "unknown";
     }
+  }
+
+  /**
+   * Wait for element to be ready using Playwright's intelligent auto-waiting
+   * This replaces manual timeout management with Playwright's built-in capabilities
+   */
+  private async waitForElementReady(
+    element: Locator,
+    config: StructuredElementSelector
+  ): Promise<void> {
+    // Use Playwright's intelligent state-based waiting instead of timeouts
+
+    // For input elements, ensure they're attached and stable first
+    if (config.type === "input" || config.type === "textarea") {
+      await element.waitFor({ state: "attached" });
+      // Playwright automatically waits for stability when interacting
+      return;
+    }
+
+    // For buttons and interactive elements, wait for visibility
+    if (config.type === "button" || config.type === "link") {
+      await element.waitFor({ state: "visible" });
+      return;
+    }
+
+    // For general elements, use the visibility option from config
+    if (config.options?.visible !== false) {
+      await element.waitFor({ state: "visible" });
+    } else {
+      // Just ensure it's attached to DOM
+      await element.waitFor({ state: "attached" });
+    }
+  }
+
+  /**
+   * Validate element state using Playwright's built-in checks
+   * This leverages Playwright's auto-waiting capabilities for state validation
+   */
+  private async validateElementState(
+    element: Locator,
+    config: StructuredElementSelector
+  ): Promise<void> {
+    // For interactive elements, check if they're enabled
+    if (config.options?.enabled !== false) {
+      if (
+        config.type === "input" ||
+        config.type === "button" ||
+        config.type === "select"
+      ) {
+        // Playwright's isEnabled() has built-in waiting and retries
+        const isEnabled = await element.isEnabled();
+        if (!isEnabled) {
+          throw new Error("Element is disabled");
+        }
+      }
+    }
+
+    // Additional validations can be added here using Playwright's built-in methods:
+    // - element.isVisible() - checks visibility with auto-waiting
+    // - element.isEditable() - for input elements
+    // - element.isChecked() - for checkboxes/radio buttons
+    // All these methods have intelligent auto-waiting built-in
   }
 }
 

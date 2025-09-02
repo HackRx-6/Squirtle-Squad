@@ -67,7 +67,7 @@ export class AppConfigService {
       },
       toolCalls: {
         enabled: process.env.TOOLCALLS_ENABLED !== "false", // Simple boolean toggle
-        maxLoops: 8, // Maximum number of tool call loops
+        maxLoops: 6, // Maximum number of tool call loops
         advanced: {
           maxUrlsPerQuery: parseInt(
             process.env.TOOLCALLS_MAX_URLS_PER_QUERY || "2"
