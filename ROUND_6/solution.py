@@ -1,16 +1,21 @@
 def find_almost_equal_substring(s: str, pattern: str) -> int:
     if len(s) < len(pattern):
         return -1
+        
+    def is_almost_equal(str1: str, str2: str) -> bool:
+        if len(str1) != len(str2):
+            return False
+        diff_count = 0
+        for c1, c2 in zip(str1, str2):
+            if c1 != c2:
+                diff_count += 1
+            if diff_count > 1:
+                return False
+        return True
     
     for i in range(len(s) - len(pattern) + 1):
         substring = s[i:i + len(pattern)]
-        diff_count = 0
-        for j in range(len(pattern)):
-            if substring[j] != pattern[j]:
-                diff_count += 1
-            if diff_count > 1:
-                break
-        if diff_count <= 1:
+        if is_almost_equal(substring, pattern):
             return i
     return -1
 
