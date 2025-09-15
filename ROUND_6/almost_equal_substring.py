@@ -4,7 +4,7 @@ def find_almost_equal_substring(s: str, pattern: str) -> int:
         return -1
     
     for i in range(n - m + 1):
-        substring = s[i:i + m]
+        substring = s[i:i+m]
         diff_count = 0
         for j in range(m):
             if substring[j] != pattern[j]:
@@ -15,11 +15,12 @@ def find_almost_equal_substring(s: str, pattern: str) -> int:
             return i
     return -1
 
-# Test cases
-s1 = "abcdefg"
-pattern1 = "bcdffg"
-print(f"Test 1: {find_almost_equal_substring(s1, pattern1)}")
+# Test the function with provided inputs
+test_cases = [
+    ("abcdefg", "bcdffg"),
+    ("ababbababa", "bacaba")
+]
 
-s2 = "ababbababa"
-pattern2 = "bacaba"
-print(f"Test 2: {find_almost_equal_substring(s2, pattern2)}")
+for s, pattern in test_cases:
+    result = find_almost_equal_substring(s, pattern)
+    print(f"s: {s}, pattern: {pattern}, result: {result}")
