@@ -52,7 +52,7 @@ export class PlaywrightService {
 
     try {
       const startTime = Date.now();
-      await this.browserManager.initializeBrowser();
+      // await this.browserManager.initializeBrowser();
       const initTime = Date.now() - startTime;
 
       this.logger.info(
