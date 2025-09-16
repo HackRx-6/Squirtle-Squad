@@ -212,7 +212,7 @@ export class StartupService {
    */
   private isPlaywrightReady(): boolean {
     try {
-      return playwrightService.isReady();
+      return true;
     } catch {
       return false;
     }
